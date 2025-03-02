@@ -7,3 +7,9 @@ pub const ZERO_VALUE: U256 = U256([
 
 
 
+
+pub fn u256_to_bytes(value: U256) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    value.to_big_endian(&mut bytes);
+    bytes
+}

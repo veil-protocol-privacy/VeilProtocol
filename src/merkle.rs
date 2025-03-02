@@ -4,16 +4,17 @@ use solana_program::blake3::Hash;
 use std::collections::HashMap;
 use std::fmt;
 use primitive_types::U256;
-use crate::util::{ZERO_VALUE};
+use crate::util::{ZERO_VALUE, u256_to_bytes};
 
 const TREE_DEPTH: usize = 16;
 
 
-fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Vec<u8> {
-    let poseidon_hash = hashv(Parameters::Bn254X5, Endianness::BigEndian, &[&left, &right]).unwrap();
+fn hash_left_right(left: U256, right: U256) -> U256 {
+    let poseidon_hash = hashv(Parameters::Bn254X5, Endianness::BigEndian, &[&u256_to_bytes(left), &u256_to_bytes(right)]).unwrap();
     
-    poseidon_hash.to_bytes().to_vec()
+    U256::from_big_endian(&poseidon_hash.to_bytes())
 }
+
 
 
 /// Batch Incremental Merkle Tree for commitments
@@ -25,34 +26,39 @@ struct Commitments {
     merkle_root: U256,
     new_tree_root: U256,
     tree_number: u64,
-    zeros: Vec<U256>,
+    zeros: [U256; TREE_DEPTH],
     filled_sub_trees: [U256; TREE_DEPTH],
     root_history: HashMap<U256, HashMap<U256, bool>>, // treeNumber -> root -> seen
 }
 
-impl Commitments {
+impl Commitments { 
     /// Create a new empty Merkle Tree
     fn new(depth: usize, parameters: Parameters) -> Self {
-        let zero_value: Vec<[u8; 4]> = ZERO_VALUE;
-        let root_history:HashMap<U256, HashMap<Vec<u8>, bool>>  = HashMap::new();
-        let zeros = [zero_value; TREE_DEPTH];
-        let filled_sub_trees:[Vec<u8>; TREE_DEPTH] = [zero_value; TREE_DEPTH];
+        let zero_value = ZERO_VALUE;
+        let mut root_history:HashMap<U256, HashMap<U256, bool>>  = HashMap::new();
+        let mut zeros = [zero_value; TREE_DEPTH];
+        let mut filled_sub_trees:[U256; TREE_DEPTH] = [zero_value; TREE_DEPTH];
 
-        zeros[0] = &zero_value;
+        zeros[0] = zero_value;
 
-        let current_zero = zero_value;
+        let mut current_zero = zero_value;
 
         for i in 0..TREE_DEPTH {
             // Push it to zeros array
-            zeros[i] = &current_zero;
+            zeros[i] = current_zero;
 
-            filled_sub_trees[i] = &current_zero;
+            filled_sub_trees[i] = current_zero;
            
             // Calculate the zero value for this level
             current_zero = hash_left_right(current_zero, current_zero);
         }
         
-        root_history[&U256::zero()][&current_zero] = true;
+        // Ensure the outer map has an entry for U256::zero()
+        root_history.entry(U256::zero()).or_insert_with(HashMap::new);
+
+        // Now safely insert into the inner HashMap
+        root_history.get_mut(&U256::zero()).unwrap().insert(current_zero, true);
+        
         Self {
             depth,
             parameters,
