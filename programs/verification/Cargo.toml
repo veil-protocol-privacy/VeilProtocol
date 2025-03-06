@@ -1,0 +1,15 @@
+[package]
+name = "verification"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+borsh = "1.5.1"
+solana-program = "1.18.26"
+groth16-solana = "0.0.3"
+ark-ec = "0.3.0"
+ark-ff = "0.3.0"
+ark-bn254 = "0.3.0"
