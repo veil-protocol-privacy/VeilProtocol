@@ -1,3 +1,9 @@
+pub mod instruction;
+pub mod merkle;
+pub mod nullifier;
+pub mod state;
+pub mod entrypoint;
+
 use primitive_types::U256;
 use solana_program::{
     account_info::AccountInfo,

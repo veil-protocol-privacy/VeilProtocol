@@ -3,8 +3,8 @@ use solana_poseidon::hashv;
 use std::collections::HashMap;
 use std::fmt;
 use std::clone;
-use crate::lib::{ZERO_VALUE, u256_to_bytes};
 use borsh::{BorshSerialize, BorshDeserialize};
+use crate::{ZERO_VALUE, u256_to_bytes};
 
 const TREE_DEPTH: usize = 16;
 

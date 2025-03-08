@@ -7,8 +7,7 @@ use solana_program::{
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
 };
-use std::collections::HashMap;
-use crate::lib::derive_pda;
+use crate::derive_pda;
 use crate::merkle::{CommitmentsAccount, new_commitments_account};
 use borsh::{BorshSerialize, BorshDeserialize};
 
@@ -47,8 +46,8 @@ pub fn initialize_commitments(
 
     // Derive PDA funding account to pay for the new account
     // TODO: change the seeds
-    let (commitments_manager_pda, commitments_manager_bump_seed) = Pubkey::find_program_address(&[b"commitments_manager_pda"], program_id);
-    if commitments_mananger_account.key != &funding_pda {
+    let (commitments_manager_pda, _commitments_manager_bump_seed) = Pubkey::find_program_address(&[b"commitments_manager_pda"], program_id);
+    if commitments_mananger_account.key != &commitments_manager_pda {
         return Err(ProgramError::InvalidSeeds);
     }
 
@@ -65,7 +64,7 @@ pub fn initialize_commitments(
 
     // Calculate minimum balance for rent exemption
     let manager_account_rent = Rent::get()?;
-    let mut manager_account_required_lamports = rent.minimum_balance(manager_account_space);
+    let manager_account_required_lamports = manager_account_rent.minimum_balance(manager_account_space);
 
     // Create the commitments manager account
     invoke_signed(
@@ -73,7 +72,7 @@ pub fn initialize_commitments(
             payer_account.key,        // Account paying for the new account
             &commitments_manager_pda,   // Account to be created
             manager_account_required_lamports,                  // Amount of lamports to transfer to the new account
-            account_space as u64,               // Size in bytes to allocate for the data field
+            manager_account_space as u64,               // Size in bytes to allocate for the data field
             program_id,                  // Set program owner to our program
         ),
         &[
