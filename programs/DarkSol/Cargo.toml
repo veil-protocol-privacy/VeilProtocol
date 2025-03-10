@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 solana-program = "1.18.26"
 solana-poseidon = "2.2.0"
+spl-token = { version="4.0.0", features = [ "no-entrypoint" ] }
 primitive-types = "0.12"
 
 ark-std = "0.5"
