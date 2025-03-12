@@ -16,8 +16,8 @@ pub fn process_instruction(
 
     // Match instruction type
     match instruction {
-        DarkSolInstruction::Deposit { requests } => {
-            process_deposit_fund(program_id, accounts, requests)?
+        DarkSolInstruction::Deposit { request } => {
+            process_deposit_fund(program_id, accounts, &request)?
         }
         DarkSolInstruction::Transfer { proofs } => process_transfer_asset(program_id, accounts, proofs)?,
         DarkSolInstruction::Withdraw { proofs } => process_withdraw_asset(program_id, accounts, proofs)?,

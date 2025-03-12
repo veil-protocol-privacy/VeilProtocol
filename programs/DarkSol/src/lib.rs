@@ -95,7 +95,3 @@ impl DepositRequest {
         borsh::from_slice(data).map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
     }
 }
-
-pub fn deserialize_requests(input: &[u8]) -> Result<Vec<DepositRequest>, ProgramError> {
-    Vec::<DepositRequest>::try_from_slice(input).map_err(|_| ProgramError::InvalidInstructionData)
-}

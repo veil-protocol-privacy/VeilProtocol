@@ -1,12 +1,12 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::program_error::ProgramError;
 
-use crate::{DepositRequest, deserialize_requests};
+use crate::DepositRequest;
 
 // Instructions that our program can execute
 #[derive(BorshSerialize, BorshDeserialize,Debug)]
 pub enum DarkSolInstruction {
-    Deposit {requests: Vec<DepositRequest>},
+    Deposit {request: DepositRequest},
     Transfer {proofs: Vec<u8>},
     Withdraw {proofs: Vec<u8>},
 }
@@ -21,8 +21,8 @@ impl DarkSolInstruction {
         // Match instruction type and parse the remaining bytes based on the variant
         match variant {
             0 => {
-                let requests = deserialize_requests(rest)?;
-                Ok(Self::Deposit { requests })
+                let request = DepositRequest::try_from_slice(rest)?;
+                Ok(Self::Deposit { request })
             }
             1 => {
                 Ok(Self::Transfer { proofs: rest.to_vec() })

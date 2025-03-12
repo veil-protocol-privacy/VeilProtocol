@@ -114,7 +114,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
 pub fn process_deposit_fund(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    requests: Vec<DepositRequest>,
+    request: &DepositRequest,
 ) -> ProgramResult {
     let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
@@ -149,32 +149,30 @@ pub fn process_deposit_fund(
         return Err(ProgramError::InvalidSeeds);
     }
 
-    let insert_leafs: &mut Vec<Vec<u8>> = &mut vec![];
+    let inserted_leaf: Vec<u8>;
 
-    for idx in 0..requests.len() {
-        // transfer token to contract owned account
-        transfer_token_in(
-            program_id,
-            &[
-                funding_account.clone(),
-                user_wallet.clone(),
-                user_token_account.clone(),
-                pda_token_account.clone(),
-                mint_account.clone(),
-                token_program.clone(),
-                system_program.clone(),
-            ],
-            requests[idx].pre_commitments.value,
-        )?;
+    // transfer token to contract owned account
+    transfer_token_in(
+        program_id,
+        &[
+            funding_account.clone(),
+            user_wallet.clone(),
+            user_token_account.clone(),
+            pda_token_account.clone(),
+            mint_account.clone(),
+            token_program.clone(),
+            system_program.clone(),
+        ],
+        request.pre_commitments.value,
+    )?;
 
-        let hash_commits_result = hash_precommits(requests[idx].pre_commitments.clone());
-        match hash_commits_result {
-            Ok(hash) => {
-                insert_leafs.push(hash);
-            }
-            Err(_err) => {
-                return Err(DarksolError::FailedCreateCommitmentHash.into());
-            }
+    let hash_commits_result = hash_precommits(request.pre_commitments.clone());
+    match hash_commits_result {
+        Ok(hash) => {
+            inserted_leaf = hash.clone();
+        }
+        Err(_err) => {
+            return Err(DarksolError::FailedCreateCommitmentHash.into());
         }
     }
 
@@ -183,10 +181,10 @@ pub fn process_deposit_fund(
     // deserialize the data
     let mut current_tree = CommitmentsAccount::try_from_slice(&commitments_data)?;
 
-    // create new commitments account if insert leafs exceeds max tree depth
-    // user should check if the inserted leafs exceeds max tree depth to 
+    // create new commitments account if insert leaf exceeds max tree depth
+    // user should check if the inserted leafs exceeds max tree depth to
     // add new commitments account to the instruction
-    if current_tree.exceed_tree_depth(insert_leafs.len()) {
+    if current_tree.exceed_tree_depth(1) {
         let new_commitments_account = next_account_info(accounts_iter)?; // new commitments account
 
         // derive a new commitments account and update the commitments account
@@ -209,7 +207,7 @@ pub fn process_deposit_fund(
     }
 
     // insert leafs into tree
-    let result = current_tree.insert_commitments(insert_leafs);
+    let result = current_tree.insert_commitments(&mut vec![inserted_leaf.clone()]);
     match result {
         Ok(resp) => {
             // update tree
