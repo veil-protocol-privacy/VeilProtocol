@@ -51,11 +51,49 @@ impl clone::Clone for PreCommitments {
     }
 }
 
+// for js client support 
+#[wasm_bindgen]
+impl PreCommitments {
+    #[wasm_bindgen(constructor)]
+    pub fn new(value: u64, encrypted_commitments: Vec<u8>) -> Self {
+        PreCommitments { encrypted_commitments, value }
+    }
+
+    #[wasm_bindgen]
+    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    }
+
+    #[wasm_bindgen]
+    pub fn deserialize(data: &[u8]) -> Result<PreCommitments, JsValue> {
+        borsh::from_slice(data).map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    }
+}
+
 #[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct DepositRequest {
     pre_commitments: PreCommitments,
     commitments: Vec<u8>,
+}
+
+// for js client support 
+#[wasm_bindgen]
+impl DepositRequest {
+    #[wasm_bindgen(constructor)]
+    pub fn new(pre_commitments: PreCommitments, commitments: Vec<u8>) -> Self {
+        DepositRequest { pre_commitments, commitments }
+    }
+
+    #[wasm_bindgen]
+    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    }
+
+    #[wasm_bindgen]
+    pub fn deserialize(data: &[u8]) -> Result<DepositRequest, JsValue> {
+        borsh::from_slice(data).map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    }
 }
 
 pub fn deserialize_requests(input: &[u8]) -> Result<Vec<DepositRequest>, ProgramError> {

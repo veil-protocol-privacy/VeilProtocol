@@ -18,7 +18,6 @@ pub struct NullifierAccount {
 
 impl NullifierAccount{
     fn new() -> Self {
-        
         Self {
             nullifiers: HashMap::new(),
         }
