@@ -15,7 +15,7 @@ use borsh::{BorshSerialize, BorshDeserialize};
 // tracks all the commitments accounts by their tree number
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct CommitmentsManagerAccount {
-    incremental_tree_number: u64,
+    pub incremental_tree_number: u64,
 }
 
 // initialize_commitments create a new commiments manager account
@@ -30,10 +30,10 @@ pub fn initialize_commitments(
 
     let payer_account = next_account_info(accounts_iter)?;
     let commitments_account = next_account_info(accounts_iter)?;
-    let commitments_mananger_account = next_account_info(accounts_iter)?;
+    let commitments_manager_account = next_account_info(accounts_iter)?;
     let system_program = next_account_info(accounts_iter)?;
 
-    if commitments_account.owner != program_id || commitments_mananger_account.owner != program_id {
+    if commitments_account.owner != program_id || commitments_manager_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
     }
 
@@ -47,7 +47,7 @@ pub fn initialize_commitments(
     // Derive PDA funding account to pay for the new account
     // TODO: change the seeds
     let (commitments_manager_pda, _commitments_manager_bump_seed) = Pubkey::find_program_address(&[b"commitments_manager_pda"], program_id);
-    if commitments_mananger_account.key != &commitments_manager_pda {
+    if commitments_manager_account.key != &commitments_manager_pda {
         return Err(ProgramError::InvalidSeeds);
     }
 
@@ -60,7 +60,7 @@ pub fn initialize_commitments(
 
 
     // Size of our commitments manager account
-    let manager_account_space = 8; 
+    let manager_account_space: usize = 8; 
 
     // Calculate minimum balance for rent exemption
     let manager_account_rent = Rent::get()?;
@@ -77,7 +77,7 @@ pub fn initialize_commitments(
         ),
         &[
             payer_account.clone(),
-            commitments_mananger_account.clone(),
+            commitments_manager_account.clone(),
             system_program.clone(),
         ],
         &[&[b"funding_pda", &[funding_bump_seed]]], 
@@ -112,7 +112,7 @@ pub fn initialize_commitments(
     let new_manager_data = CommitmentsManagerAccount{
         incremental_tree_number: 2
     };
-    let mut manager_data: &mut [u8] = &mut commitments_mananger_account.data.borrow_mut()[..];
+    let mut manager_data: &mut [u8] = &mut commitments_manager_account.data.borrow_mut()[..];
     new_manager_data.serialize(&mut manager_data);
 
     msg!("creating new commitments manager account with increment: {}", 2);
@@ -135,10 +135,10 @@ pub fn initialize_commitments(
 pub fn initialize_commitments_account(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-) -> Result<(), ProgramError> {
+) -> Result<CommitmentsAccount, ProgramError> {
     let accounts_iter: &mut std::slice::Iter<'_, _> = &mut accounts.iter();
 
-    let payer_account = next_account_info(accounts_iter)?;
+    let funding_account = next_account_info(accounts_iter)?;
     let commitments_account = next_account_info(accounts_iter)?;
     let commitments_mananger_account = next_account_info(accounts_iter)?;
     let system_program = next_account_info(accounts_iter)?;
@@ -150,7 +150,7 @@ pub fn initialize_commitments_account(
     // Derive PDA funding account to pay for the new account
     // TODO: change the seeds
     let (funding_pda, funding_bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], program_id);
-    if payer_account.key != &funding_pda {
+    if funding_account.key != &funding_pda {
         return Err(ProgramError::InvalidSeeds);
     }
 
@@ -180,14 +180,14 @@ pub fn initialize_commitments_account(
     // Create the commitments account
     invoke_signed(
         &system_instruction::create_account(
-            payer_account.key,        // Account paying for the new account
+            funding_account.key,        // Account paying for the new account
             &account_pda,                     // Account to be created
             required_lamports,                  // Amount of lamports to transfer to the new account
             account_space as u64,               // Size in bytes to allocate for the data field
             program_id,                  // Set program owner to our program
         ),
         &[
-            payer_account.clone(),
+            funding_account.clone(),
             commitments_account.clone(),
             system_program.clone(),
         ],
@@ -208,5 +208,5 @@ pub fn initialize_commitments_account(
 
     msg!("commitments initialized");
 
-    Ok(())
+    Ok(new_empty_tree)
 }

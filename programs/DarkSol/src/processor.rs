@@ -1,10 +1,14 @@
-use crate::{u256_to_bytes, ZERO_VALUE};
+use crate::merkle::CommitmentsAccount;
+use crate::{derive_pda, DepositRequest};
+use crate::{
+    error::DarksolError,
+    merkle::hash_precommits,
+    state::{initialize_commitments_account, CommitmentsManagerAccount},
+};
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_poseidon::hashv;
-use solana_poseidon::{Endianness, Parameters, PoseidonHash};
+use solana_program::program_pack::Pack;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
-    entrypoint,
     entrypoint::ProgramResult,
     program::{invoke, invoke_signed},
     program_error::ProgramError,
@@ -17,21 +21,17 @@ use spl_token::{
     instruction::{initialize_account, transfer as spl_transfer},
     state::Account as TokenAccount,
 };
-use std::clone;
-use std::collections::HashMap;
-use std::fmt;
 
-// process_deposit_fund deposit user fund into contract owned account
-// this will be added into unshield transactions list. Create a new token account
-// for the deposit account if it's not initialized yet
-pub fn process_deposit_fund(
+// transfer_token_in deposit user fund into contract owned account.
+// Create a new token account for the deposit account if it's not initialized yet
+fn transfer_token_in(
     program_id: &Pubkey,
-    accounts: &[AccountInfo],
-    data: u64,
+    accounts: &[AccountInfo; 8],
+    amount: u64,
 ) -> ProgramResult {
-    let accounts_iter = &mut accounts.iter();
+    let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
-    let accounts_iter = &mut accounts.iter();
+    let funding_account = next_account_info(accounts_iter)?;
     let user_wallet = next_account_info(accounts_iter)?; // User's SOL wallet (payer)
     let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
     let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
@@ -40,16 +40,11 @@ pub fn process_deposit_fund(
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
     let system_program = next_account_info(accounts_iter)?; // System Program for creating accounts
 
-    // Ensure the user_wallet signed the transaction
-    if !user_wallet.is_signer {
-        return Err(ProgramError::MissingRequiredSignature);
-    }
-
     // Derive PDA funding account to pay for the new account
     // TODO: change the seeds
     let (funding_pda, _funding_bump_seed) =
         Pubkey::find_program_address(&[b"funding_pda"], program_id);
-    if payer_account.key != &funding_pda {
+    if funding_account.key != &funding_pda {
         return Err(ProgramError::InvalidSeeds);
     }
 
@@ -61,11 +56,13 @@ pub fn process_deposit_fund(
         return Err(ProgramError::InvalidSeeds);
     }
 
+    // TODO: apply deposit fee
+
     // Check if PDA's token account is already initialized
     if pda_token_account.data_is_empty() {
         // PDA's token account is not initialized → Create it
 
-        let rent = &Rent::get()?;
+        let rent: &Rent = &Rent::get()?;
         let required_lamports = rent.minimum_balance(TokenAccount::LEN);
 
         invoke(
@@ -90,18 +87,19 @@ pub fn process_deposit_fund(
                 pda_token_account.key,
                 mint_account.key,
                 pda_account.key, // PDA is the owner of this token account
-            ).unwrap(),
+            )
+            .unwrap(),
             &[
                 pda_token_account.clone(),
                 mint_account.clone(),
                 pda_account.clone(),
                 token_program.clone(),
-                rent_sysvar.clone(),
             ],
             &[&[b"deposit_account", &[bump_seed]]], // PDA signs
         )?;
     }
 
+    // transfer token to contract owned token account
     invoke(
         // TODO: emit error
         &spl_transfer(
@@ -111,7 +109,8 @@ pub fn process_deposit_fund(
             user_wallet.key, // User must sign as authority
             &[],
             amount,
-        ).unwrap(),
+        )
+        .unwrap(),
         &[
             user_token_account.clone(),
             pda_token_account.clone(),
@@ -120,23 +119,117 @@ pub fn process_deposit_fund(
         ],
     )?;
 
-    // TODO: add an unshielded entry to the list
-
     Ok(())
 }
 
-// process_shielded_asset take the unshieled asset in the list
-// add an encrypted commitments to the merkel tree represents 
-// an unspent entry transaction output. Only the owner of that
-// UTXO can decrypt it.
-pub fn process_hide_asset(
+// process_deposit_fund deposit user fund into contract owned account
+// insert new UTXO into current merkel tree, if exceeds maximum tree depth
+// create new account to store new tree
+pub fn process_deposit_fund(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    encrypted_commitments: Vec<u8>,
+    requests: Vec<DepositRequest>,
 ) -> ProgramResult {
-    // TODO: update UnshieldedAsset data
+    let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
-    // TODO: insert UTXO to current merkel tree account
+    let funding_account= next_account_info(accounts_iter)?;
+    let user_wallet = next_account_info(accounts_iter)?; // User's SOL wallet (payer)
+    let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
+    let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
+    let mint_account: &AccountInfo<'_> = next_account_info(accounts_iter)?; // SPL Token Mint
+    let pda_account: &AccountInfo<'_> = next_account_info(accounts_iter)?; // PDA acting as authority
+    let commitments_account = next_account_info(accounts_iter)?; // current commitments account
+    let commitments_manager_account = next_account_info(accounts_iter)?;
+    let token_program = next_account_info(accounts_iter)?; // SPL Token Program
+    let system_program = next_account_info(accounts_iter)?; // System Program for creating accounts
+
+    if commitments_account.owner != program_id || commitments_manager_account.owner != program_id {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
+    // Ensure the user_wallet signed the transaction
+    if !user_wallet.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
+    // fetch the current tree number
+    let data = commitments_manager_account.data.borrow_mut();
+    // deserialize the data
+    let manager_data: CommitmentsManagerAccount =
+        CommitmentsManagerAccount::try_from_slice(&data)?;
+
+    // Derive the PDA for the current commitments account
+    let (account_pda, _bump_seed) = derive_pda(manager_data.incremental_tree_number, program_id);
+    // Ensure the provided new_account is the correct PDA
+    if commitments_account.key != &account_pda {
+        return Err(ProgramError::InvalidSeeds);
+    }
+
+    let insert_leafs: &mut Vec<Vec<u8>> = &mut vec![];
+
+    for idx in 0..requests.len() {
+        // transfer token to contract owned account
+        transfer_token_in(
+            program_id,
+            &[
+                funding_account.clone(),
+                user_wallet.clone(),
+                user_token_account.clone(),
+                pda_token_account.clone(),
+                mint_account.clone(),
+                pda_account.clone(),
+                token_program.clone(),
+                system_program.clone(),
+            ],
+            requests[idx].pre_commitments.value,
+        )?;
+
+        let hash_commits_result = hash_precommits(requests[idx].pre_commitments.clone());
+        match hash_commits_result {
+            Ok(hash) => {
+                insert_leafs.push(hash);
+            }
+            Err(_err) => {
+                return Err(DarksolError::FailedCreateCommitmentHash.into());
+            }
+        }
+    }
+
+    // fetch current tree number
+    let mut commitments_data = &mut commitments_account.data.borrow_mut()[..];
+    // deserialize the data
+    let mut current_tree = CommitmentsAccount::try_from_slice(&commitments_data)?;
+
+    // create new commitments account if insert leafs exceeds max tree depth
+    if current_tree.exceed_tree_depth(insert_leafs.len()) {
+        // derive a new commitments account and update the commitments account
+        let (new_pda, _bump_seed) = derive_pda(manager_data.incremental_tree_number + 1, program_id);
+        let new_commitments_account = &mut commitments_account.clone();
+        new_commitments_account.key = &new_pda;
+
+        current_tree = initialize_commitments_account(
+            program_id,
+            &[
+                funding_account.clone(),
+                new_commitments_account.clone(),
+                commitments_manager_account.clone(),
+                system_program.clone(),
+            ],
+        )?;
+    }
+
+    // insert leafs into tree
+    let result = current_tree.insert_commitments(insert_leafs);
+    match result {
+        Ok(resp) => {
+            // update tree
+            resp.commitments_data.serialize(&mut commitments_data)?
+        }
+        Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
+    }
+
+    // TODO: emit events for indexer to scan
+
     Ok(())
 }
 
@@ -157,7 +250,7 @@ pub fn process_transfer_asset(
 }
 
 // process_withdraw_asset verifies the zkp for ownership of the UTXO
-// transfer the token from contract vault token account to receiver 
+// transfer the token from contract vault token account to receiver
 // token account
 pub fn process_withdraw_asset(
     program_id: &Pubkey,
