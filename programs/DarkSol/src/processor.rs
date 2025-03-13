@@ -1,11 +1,14 @@
 use crate::merkle::CommitmentsAccount;
-use crate::{derive_pda, DepositRequest};
+use crate::{derive_pda, DepositEvent, DepositRequest};
 use crate::{
     error::DarksolError,
     merkle::hash_precommits,
     state::{initialize_commitments_account, CommitmentsManagerAccount},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde::Serialize;
+use serde_wasm_bindgen::preserve::serialize;
+use solana_program::log::sol_log_data;
 use solana_program::program_pack::Pack;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -149,8 +152,6 @@ pub fn process_deposit_fund(
         return Err(ProgramError::InvalidSeeds);
     }
 
-    let inserted_leaf: Vec<u8>;
-
     // transfer token to contract owned account
     transfer_token_in(
         program_id,
@@ -166,20 +167,13 @@ pub fn process_deposit_fund(
         request.pre_commitments.value,
     )?;
 
-    let hash_commits_result = hash_precommits(request.pre_commitments.clone());
-    match hash_commits_result {
-        Ok(hash) => {
-            inserted_leaf = hash.clone();
-        }
-        Err(_err) => {
-            return Err(DarksolError::FailedCreateCommitmentHash.into());
-        }
-    }
+    let inserted_leaf = hash_precommits(request.pre_commitments.clone())?;
 
     // fetch current tree number
     let mut commitments_data = &mut commitments_account.data.borrow_mut()[..];
     // deserialize the data
     let mut current_tree = CommitmentsAccount::try_from_slice(&commitments_data)?;
+    let mut current_tree_number = manager_data.incremental_tree_number;
 
     // create new commitments account if insert leaf exceeds max tree depth
     // user should check if the inserted leafs exceeds max tree depth to
@@ -189,7 +183,7 @@ pub fn process_deposit_fund(
 
         // derive a new commitments account and update the commitments account
         let (new_pda, _bump_seed) =
-            derive_pda(manager_data.incremental_tree_number + 1, program_id);
+            derive_pda(current_tree_number + 1, program_id);
 
         if new_commitments_account.key != &new_pda {
             return Err(ProgramError::InvalidSeeds);
@@ -204,9 +198,11 @@ pub fn process_deposit_fund(
                 system_program.clone(),
             ],
         )?;
+
+        current_tree_number = current_tree_number + 1;
     }
 
-    // insert leafs into tree
+    // insert leaf into tree
     let result = current_tree.insert_commitments(&mut vec![inserted_leaf.clone()]);
     match result {
         Ok(resp) => {
@@ -216,7 +212,15 @@ pub fn process_deposit_fund(
         Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
     }
 
-    // TODO: emit events for indexer to scan
+    // emit events for indexer to scan
+    let event = DepositEvent{
+        start_position: current_tree.next_leaf_index as u64,
+        tree_number: current_tree_number,
+        pre_commitments: request.pre_commitments.clone(),
+        shield_cipher_text: request.shield_cipher_text.clone(),
+    };
+    let serialize_event = borsh::to_vec(&event)?;
+    sol_log_data(&[b"deposit_event", &serialize_event]);
 
     Ok(())
 }

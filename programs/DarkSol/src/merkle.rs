@@ -1,12 +1,14 @@
+use crate::error::DarksolError;
 use crate::{u256_to_bytes, PreCommitments, ZERO_VALUE};
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_poseidon::hashv;
 use solana_poseidon::{Endianness, Parameters, PoseidonHash};
+use solana_program::program_error::ProgramError;
 use std::clone;
 use std::collections::HashMap;
 use std::fmt;
 
-const TREE_DEPTH: usize = 16;
+const TREE_DEPTH: usize = 32;
 
 fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Result<Vec<u8>, String> {
     let result: Result<PoseidonHash, solana_poseidon::PoseidonSyscallError> =
@@ -23,7 +25,7 @@ fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Result<Vec<u8>, String> {
     }
 }
 
-pub fn hash_precommits(pre_commitments: PreCommitments) -> Result<Vec<u8>, String> {
+pub fn hash_precommits(pre_commitments: PreCommitments) -> Result<Vec<u8>, ProgramError> {
     let value_in_byte = u64::to_le_bytes(pre_commitments.value);
     let result: Result<PoseidonHash, solana_poseidon::PoseidonSyscallError> = hashv(
         Parameters::Bn254X5,
@@ -36,8 +38,8 @@ pub fn hash_precommits(pre_commitments: PreCommitments) -> Result<Vec<u8>, Strin
             let bytes = hash.to_bytes();
             return Ok(bytes.to_vec());
         }
-        Err(err) => {
-            return Err(format!("fail to create hash: {}", err.to_string()));
+        Err(_err) => {
+            return Err(DarksolError::FailedCreateCommitmentHash.into());
         }
     }
 }

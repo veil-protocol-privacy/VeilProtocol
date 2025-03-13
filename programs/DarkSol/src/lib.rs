@@ -8,9 +8,11 @@ pub mod state;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use primitive_types::U256;
-use solana_program::{account_info::AccountInfo, pubkey::Pubkey, program_error::ProgramError};
+use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
 use wasm_bindgen::prelude::*;
 use std::clone;
+use serde::{Serialize, Deserialize};
+use serde_wasm_bindgen::{from_value, to_value};
 
 pub const ZERO_VALUE: U256 = U256([
     0x30644E72E131A029,
@@ -71,18 +73,58 @@ impl PreCommitments {
 }
 
 #[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+pub struct ShieldCipherText {
+    encrypted_text: Vec<Vec<u8>>,
+    shield_key: Vec<u8>,
+}
+
+impl clone::Clone for ShieldCipherText {
+    fn clone(&self) -> ShieldCipherText {
+        return ShieldCipherText {
+            encrypted_text: self.encrypted_text.clone(),
+            shield_key: self.shield_key.clone()
+        };
+    }
+}
+
+// for js client support 
+#[wasm_bindgen]
+impl ShieldCipherText {
+    #[wasm_bindgen(constructor)]
+    pub fn new(shield_key: Vec<u8>, ) -> Self {
+        ShieldCipherText { shield_key, encrypted_text: Vec::new() }
+    }
+
+    #[wasm_bindgen]
+    pub fn from_js_value(js_value: JsValue) -> Result<ShieldCipherText, JsValue> {
+        from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen]
+    pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
+        to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen]
+    pub fn push_data(&mut self, value: Vec<u8>) {
+        self.encrypted_text.push(value);
+    }
+}
+
+#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct DepositRequest {
     pre_commitments: PreCommitments,
-    commitments: Vec<u8>,
+    shield_cipher_text: ShieldCipherText,
 }
 
 // for js client support 
 #[wasm_bindgen]
 impl DepositRequest {
     #[wasm_bindgen(constructor)]
-    pub fn new(pre_commitments: PreCommitments, commitments: Vec<u8>) -> Self {
-        DepositRequest { pre_commitments, commitments }
+    pub fn new(pre_commitments: PreCommitments, shield_cipher_text: ShieldCipherText) -> Self {
+        DepositRequest { pre_commitments, shield_cipher_text }
     }
 
     #[wasm_bindgen]
@@ -92,6 +134,40 @@ impl DepositRequest {
 
     #[wasm_bindgen]
     pub fn deserialize(data: &[u8]) -> Result<DepositRequest, JsValue> {
+        borsh::from_slice(data).map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    }
+}
+
+// DepositEvent defines log after deposit instruction
+#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
+pub struct DepositEvent {
+    tree_number: u64,
+    start_position: u64,
+    pre_commitments: PreCommitments,
+    shield_cipher_text: ShieldCipherText,
+}
+
+// for js client support 
+#[wasm_bindgen]
+impl DepositEvent {
+    #[wasm_bindgen]
+    pub fn new(start_position: u64, tree_number: u64, pre_commitments: PreCommitments, shield_cipher_text: ShieldCipherText,) -> Self {
+        DepositEvent {
+            start_position,
+            tree_number,
+            pre_commitments,
+            shield_cipher_text,
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    }
+
+    #[wasm_bindgen]
+    pub fn deserialize(data: &[u8]) -> Result<DepositEvent, JsValue> {
         borsh::from_slice(data).map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
     }
 }
