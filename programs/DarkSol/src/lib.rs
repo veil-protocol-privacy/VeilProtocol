@@ -152,7 +152,7 @@ pub struct DepositEvent {
 #[wasm_bindgen]
 impl DepositEvent {
     #[wasm_bindgen]
-    pub fn new(start_position: u64, tree_number: u64, pre_commitments: PreCommitments, shield_cipher_text: ShieldCipherText,) -> Self {
+    pub fn new(start_position: u64, tree_number: u64, pre_commitments: PreCommitments, shield_cipher_text: ShieldCipherText) -> Self {
         DepositEvent {
             start_position,
             tree_number,

@@ -17,20 +17,20 @@ pub struct NullifierAccount {
 }
 
 impl NullifierAccount{
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             nullifiers: HashMap::new(),
         }
     }
 
-    fn insert_nullifier(
+    pub fn insert_nullifier(
         &mut self,
         nullifier: Vec<u8>,
     ) {
         self.nullifiers.insert(nullifier, true);
     } 
 
-    fn check_nullifier(
+    pub fn check_nullifier(
         &self,
         nullifier: Vec<u8>,
     ) -> bool {
@@ -40,7 +40,7 @@ impl NullifierAccount{
 }
 
 // create a hash using user secret key and leaf commitment
-fn create_nullifier(
+pub fn create_nullifier(
     secret_key: &Vec<u8>,
     commitment: &Vec<u8>,
 ) -> Result<Vec<u8>, String> {
