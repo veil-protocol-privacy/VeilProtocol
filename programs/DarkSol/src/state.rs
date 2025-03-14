@@ -8,8 +8,10 @@ use solana_program::{
     sysvar::{rent::Rent, Sysvar},
 };
 use crate::derive_pda;
-use crate::merkle::{CommitmentsAccount, new_commitments_account};
+use crate::merkle::CommitmentsAccount;
 use borsh::{BorshSerialize, BorshDeserialize};
+
+const TREE_DEPTH: usize = 16;
 
 // CommitmentsManagerAccount is a single account
 // tracks all the commitments accounts by their tree number
@@ -118,7 +120,7 @@ pub fn initialize_commitments(
     msg!("creating new commitments manager account with increment: {}", 2);
 
     // store empty tree to the newly created commitments account
-    let new_empty_tree: CommitmentsAccount = new_commitments_account(1);
+    let new_empty_tree: CommitmentsAccount<TREE_DEPTH> = CommitmentsAccount::new(1);
     let mut account_data: &mut [u8] = &mut commitments_account.data.borrow_mut()[..];
     // Serialize the struct into the account's data
     new_empty_tree.serialize(&mut account_data)?;
@@ -135,7 +137,7 @@ pub fn initialize_commitments(
 pub fn initialize_commitments_account(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-) -> Result<CommitmentsAccount, ProgramError> {
+) -> Result<CommitmentsAccount<TREE_DEPTH>, ProgramError> {
     let accounts_iter: &mut std::slice::Iter<'_, _> = &mut accounts.iter();
 
     let funding_account = next_account_info(accounts_iter)?;
@@ -201,7 +203,7 @@ pub fn initialize_commitments_account(
     msg!("adding new commitment account to manager");
 
     // store empty tree to the newly created commitments account
-    let new_empty_tree: CommitmentsAccount = new_commitments_account(new_tree_number as u64);
+    let new_empty_tree: CommitmentsAccount<TREE_DEPTH> = CommitmentsAccount::new(new_tree_number as u64);
     let mut account_data: &mut [u8] = &mut commitments_account.data.borrow_mut()[..];
     // Serialize the struct into the account's data
     new_empty_tree.serialize(&mut account_data)?;
