@@ -115,7 +115,7 @@ pub fn initialize_commitments(
         incremental_tree_number: 2
     };
     let mut manager_data: &mut [u8] = &mut commitments_manager_account.data.borrow_mut()[..];
-    new_manager_data.serialize(&mut manager_data);
+    new_manager_data.serialize(&mut manager_data)?;
 
     msg!("creating new commitments manager account with increment: {}", 2);
 

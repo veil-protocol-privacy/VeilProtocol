@@ -170,16 +170,15 @@ pub fn process_deposit_fund(
     // fetch current tree number
     let mut commitments_data = &mut commitments_account.data.borrow_mut()[..];
     // deserialize the data
-    let mut current_tree: CommitmentsAccount = CommitmentsAccount::try_from_slice(&commitments_data)?;
-    let mut current_tree_number = manager_data.incremental_tree_number;
-    let mut start_position: u64 = 0;
+    let mut current_tree = CommitmentsAccount::try_from_slice(&commitments_data)?;
+    let mut current_tree_number: u64 = manager_data.incremental_tree_number;
+    let start_position: u64 = 0;
 
     // create new commitments account if insert leaf exceeds max tree depth
     // user should check if the inserted leafs exceeds max tree depth to
     // add new commitments account to the instruction
     if current_tree.exceed_tree_depth(1) {
         let new_commitments_account = next_account_info(accounts_iter)?; // new commitments account
-        let mut current_tree_number = manager_data.incremental_tree_number;
 
         // derive a new commitments account and update the commitments account
         let (new_pda, _bump_seed) = derive_pda(current_tree_number + 1, program_id);
@@ -199,7 +198,7 @@ pub fn process_deposit_fund(
         )?;
 
         let mut new_commitments_data = &mut new_commitments_account.data.borrow_mut()[..];
-        current_tree_number = current_tree_number + 1;
+        current_tree_number += 1;
 
         // insert leaf into tree
         let result = current_tree.insert_commitments(&mut vec![inserted_leaf.clone()]);
@@ -224,7 +223,7 @@ pub fn process_deposit_fund(
 
     // emit events for indexer to scan
     let event = DepositEvent {
-        start_position: start_position,
+        start_position,
         tree_number: current_tree_number,
         pre_commitments: request.pre_commitments.clone(),
         shield_cipher_text: request.shield_cipher_text.clone(),
