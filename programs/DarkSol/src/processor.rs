@@ -13,7 +13,7 @@ use solana_program::program_pack::Pack;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint::ProgramResult,
-    program::{invoke, invoke_signed},
+    program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
     rent::Rent,
@@ -54,7 +54,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
         let rent: &Rent = &Rent::get()?;
         let required_lamports = rent.minimum_balance(TokenAccount::LEN);
 
-        invoke(
+        invoke_signed(
             &system_instruction::create_account(
                 &funding_pda, // funding account pays for the new account
                 pda_token_account.key,
@@ -67,6 +67,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
                 pda_token_account.clone(),
                 system_program.clone(),
             ],
+            &[&[b"funding_pda", &[bump_seed]]], // PDA signs
         )?;
 
         invoke_signed(
@@ -89,7 +90,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
     }
 
     // transfer token to contract owned token account
-    invoke(
+    invoke_signed(
         // TODO: emit error
         &spl_transfer(
             token_program.key,
@@ -106,6 +107,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
             user_wallet.clone(),
             token_program.clone(),
         ],
+        &[&[b"funding_pda", &[bump_seed]]], // PDA signs
     )?;
 
     Ok(())
@@ -122,7 +124,7 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
 
     // Derive PDA funding account to pay for the new account
     // TODO: change the seeds
-    let (funding_pda, _bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], program_id);
+    let (funding_pda, bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], program_id);
 
     // check all the accounts info
     if funding_account.key != &funding_pda || pda_token_account.owner != &funding_pda || user_token_account.owner != user_wallet.key {
@@ -132,7 +134,7 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
     // TODO: apply withdraw fee
 
     // transfer token from contract owned token account to user token address
-    invoke(
+    invoke_signed(
         // TODO: emit error
         &spl_transfer(
             token_program.key,
@@ -149,6 +151,7 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
             user_wallet.clone(),
             token_program.clone(),
         ],
+        &[&[b"funding_pda", &[bump_seed]]], // PDA signs
     )?;
 
     Ok(())
