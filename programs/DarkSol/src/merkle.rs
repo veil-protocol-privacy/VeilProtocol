@@ -52,6 +52,7 @@ pub struct CommitmentsAccount<const TREE_DEPTH: usize> {
     zeros: Vec<Vec<u8>>,
     filled_sub_trees: Vec<Vec<u8>>,
     root_history: HashMap<Vec<u8>, bool>, // root -> seen
+    nullifiers: HashMap<Vec<u8>, bool>,
 }
 
 // InsertResp return the tree number the insertion occur
@@ -92,6 +93,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
             zeros,
             filled_sub_trees,
             root_history,
+            nullifiers: HashMap::new(),
         }
     }
 
@@ -200,6 +202,27 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
     /// Get the Merkle root
     pub fn root(&self) -> Vec<u8> {
         self.merkle_root.clone()
+    }
+
+    pub fn insert_nullifier(
+        &mut self,
+        nullifier: Vec<u8>,
+    ) {
+        self.nullifiers.insert(nullifier, true);
+    } 
+
+    pub fn insert_nullifiers(
+        &mut self,
+        nullifiers: HashMap<Vec<u8>, bool>,
+    ) {
+        self.nullifiers.extend(nullifiers);
+    } 
+
+    pub fn check_nullifier(
+        &self,
+        nullifier: &Vec<u8>,
+    ) -> bool {
+        self.nullifiers.contains_key(nullifier)
     }
 }
 

@@ -7,11 +7,9 @@ use solana_program::{
     system_instruction,
     sysvar::{rent::Rent, Sysvar},
 };
-use crate::derive_pda;
+use crate::{derive_pda, error::DarksolError, TREE_DEPTH};
 use crate::merkle::CommitmentsAccount;
 use borsh::{BorshSerialize, BorshDeserialize};
-
-const TREE_DEPTH: usize = 16;
 
 // CommitmentsManagerAccount is a single account
 // tracks all the commitments accounts by their tree number
@@ -53,13 +51,17 @@ pub fn initialize_commitments(
         return Err(ProgramError::InvalidSeeds);
     }
 
+    // account should only initialized once
+    if !commitments_manager_account.data_is_empty() {
+        return Err(DarksolError::AccountAlreadyInitialized.into());
+    }
+
     // Derive the PDA for the newly account
     let (account_pda, _bump_seed) = derive_pda( 1, program_id);
     // Ensure the provided new_account is the correct PDA
     if commitments_account.key != &account_pda {
         return Err(ProgramError::InvalidSeeds);
     }
-
 
     // Size of our commitments manager account
     let manager_account_space: usize = 8; 

@@ -15,6 +15,18 @@ pub enum DarksolError {
     // 2
     /// Invalid instructions data
     InvalidInstructionData,
+
+    // 3
+    /// Invalid request
+    InvalidRequest,
+
+    // 4
+    /// commitments manager account already initialized
+    AccountAlreadyInitialized,
+
+    // 5
+    /// UTXO already spent
+    UtxoAlreadySpent
 }
 
 impl From<DarksolError> for ProgramError {
