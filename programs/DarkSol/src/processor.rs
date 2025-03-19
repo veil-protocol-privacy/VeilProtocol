@@ -214,7 +214,7 @@ pub fn process_deposit_fund(
         request.pre_commitments.value,
     )?;
 
-    let inserted_leaf = hash_precommits(request.pre_commitments.clone())?;
+    let inserted_leaf = hash_precommits(request.pre_commitments.clone());
 
     // fetch current tree number
     let mut commitments_data = &mut commitments_account.data.borrow_mut()[..];
