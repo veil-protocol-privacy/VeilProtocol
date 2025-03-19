@@ -1,6 +1,6 @@
 use crate::merkle::CommitmentsAccount;
 use std::collections::HashMap;
-use crate::{derive_pda, DepositEvent, DepositRequest, TransferEvent, TransferRequest, WithdrawRequest};
+use crate::{derive_pda, fetch_mint_address, DepositEvent, DepositRequest, TransferEvent, TransferRequest, WithdrawEvent, WithdrawRequest};
 use crate::{
     error::DarksolError,
     merkle::hash_precommits,
@@ -9,6 +9,7 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::log::sol_log_data;
+use solana_program::program::invoke;
 use solana_program::program_pack::Pack;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -89,7 +90,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
     }
 
     // transfer token to contract owned token account
-    invoke_signed(
+    invoke(
         // TODO: emit error
         &spl_transfer(
             token_program.key,
@@ -105,7 +106,6 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
             user_wallet.clone(),
             token_program.clone(),
         ],
-        &[&[b"funding_pda", &[bump_seed]]], // PDA signs
     )?;
 
     Ok(())
@@ -329,7 +329,7 @@ pub fn process_transfer_asset(
     let manager_data: CommitmentsManagerAccount = CommitmentsManagerAccount::try_from_slice(&data)?;
     let mut current_tree_number = manager_data.incremental_tree_number;
 
-    let mut start_position: u64 = 0;
+    let start_position: u64;
 
     // update merkle tree
     // create new commitments account if insert leaf exceeds max tree depth
@@ -465,6 +465,15 @@ pub fn process_withdraw_asset(
         ],
          request.pre_commitments.value
     )?;
+
+    // emit event
+    let event = WithdrawEvent {
+        receiver: user_token_account.key.to_string(),
+        amount: request.pre_commitments.value,
+        token_mint_address: fetch_mint_address(user_token_account)?,
+    };
+    let serialize_event = borsh::to_vec(&event)?;
+    sol_log_data(&[b"transfer_event", &serialize_event]);
 
     Ok(())
 }

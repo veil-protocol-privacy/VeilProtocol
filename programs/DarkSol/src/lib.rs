@@ -7,7 +7,8 @@ pub mod state;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use primitive_types::U256;
-use solana_program::{account_info::AccountInfo, pubkey::Pubkey};
+use solana_program::{account_info::AccountInfo, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey};
+use spl_token::state::Account as TokenAccount;
 use wasm_bindgen::prelude::*;
 use std::clone;
 use serde::{Serialize, Deserialize};
@@ -31,10 +32,6 @@ pub fn u256_to_bytes(value: U256) -> [u8; 32] {
 pub fn derive_pda(value: u64, program_id: &Pubkey) -> (Pubkey, u8) {
     let seed = value.to_le_bytes();
     Pubkey::find_program_address(&[&seed], program_id)
-}
-
-pub fn is_account_initialized(account: &AccountInfo) -> bool {
-    !account.data_is_empty() // Returns true if account has data
 }
 
 // PreCommitments contains info before being shielded inside protocol
@@ -341,6 +338,80 @@ impl WithdrawRequest {
             nullifiers: Vec::new(), 
             metadata: RequestMetaData::new(tree_number), 
             pre_commitments: PreCommitments::new(amount, Vec::new()) // no need to provide the encrypted value here 
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn from_js_value(js_value: JsValue) -> Result<ShieldCipherText, JsValue> {
+        from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen]
+    pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
+        to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen]
+    pub fn push_nullifiers(&mut self, value: Vec<u8>) {
+        self.nullifiers.push(value);
+    }
+}
+
+pub fn fetch_mint_address(token_account: &AccountInfo) -> Result<String, ProgramError> {
+    let token_data = token_account.try_borrow_data()?;
+    let token_account = TokenAccount::unpack(&token_data)?;
+
+    Ok(token_account.mint.to_string())
+}
+
+// WithdrawEvent defines log after withdraw instruction
+#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
+pub struct WithdrawEvent {
+    receiver: String,
+    amount: u64,
+    token_mint_address: String,
+}
+
+
+// for js client support 
+#[wasm_bindgen]
+impl WithdrawEvent {
+    #[wasm_bindgen]
+    pub fn new(receiver: String, amount: u64, token_mint_address: String) -> Self {
+        WithdrawEvent {
+            receiver,
+            amount,
+            token_mint_address,
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    }
+
+    #[wasm_bindgen]
+    pub fn deserialize(data: &[u8]) -> Result<WithdrawEvent, JsValue> {
+        borsh::from_slice(data).map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    }
+}
+
+// NullifierEvent defines log after adding new nullifers instruction
+#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+pub struct NullifierEvent {
+    nullifiers: Vec<Vec<u8>>,
+}
+
+
+// for js client support 
+#[wasm_bindgen]
+impl NullifierEvent {
+    #[wasm_bindgen]
+    pub fn new() -> Self {
+        NullifierEvent {
+            nullifiers: Vec::new()
         }
     }
 
