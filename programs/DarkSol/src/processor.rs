@@ -1,6 +1,6 @@
 use crate::merkle::CommitmentsAccount;
 use std::collections::HashMap;
-use crate::{derive_pda, DepositEvent, DepositRequest, TransferRequest, WithdrawRequest};
+use crate::{derive_pda, DepositEvent, DepositRequest, TransferEvent, TransferRequest, WithdrawRequest};
 use crate::{
     error::DarksolError,
     merkle::hash_precommits,
@@ -77,8 +77,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
                 pda_token_account.key,
                 mint_account.key,
                 &funding_account.key, // PDA is the owner of this token account
-            )
-            .unwrap(),
+            )?,
             &[
                 pda_token_account.clone(),
                 mint_account.clone(),
@@ -99,8 +98,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
             user_wallet.key, // User must sign as authority
             &[],
             amount,
-        )
-        .unwrap(),
+        )?,
         &[
             user_token_account.clone(),
             pda_token_account.clone(),
@@ -143,8 +141,7 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
             user_wallet.key, // User must sign as authority
             &[],
             amount,
-        )
-        .unwrap(),
+        )?,
         &[
             pda_token_account.clone(),
             user_token_account.clone(),
@@ -326,6 +323,14 @@ pub fn process_transfer_asset(
         inserted_nullifiers.insert(request.nullifiers[idx].clone(), true);
     }
 
+    // fetch the current tree number
+    let data = commitments_manager_account.data.borrow_mut();
+    // deserialize the data
+    let manager_data: CommitmentsManagerAccount = CommitmentsManagerAccount::try_from_slice(&data)?;
+    let mut current_tree_number = manager_data.incremental_tree_number;
+
+    let mut start_position: u64 = 0;
+
     // update merkle tree
     // create new commitments account if insert leaf exceeds max tree depth
     // user should check if the inserted leafs exceeds max tree depth to
@@ -335,14 +340,9 @@ pub fn process_transfer_asset(
         let new_commitments_account = next_account_info(accounts_iter)?; // new commitments account
         let system_program = next_account_info(accounts_iter)?; // System Program for creating accounts
 
-        // fetch the current tree number
-        let data = commitments_manager_account.data.borrow_mut();
-        // deserialize the data
-        let manager_data: CommitmentsManagerAccount = CommitmentsManagerAccount::try_from_slice(&data)?;
-        let current_tree_number = manager_data.incremental_tree_number;
-
+        current_tree_number += 1;
         // derive a new commitments account and update the commitments account
-        let (new_pda, _bump_seed) = derive_pda(current_tree_number + 1, program_id);
+        let (new_pda, _bump_seed) = derive_pda(current_tree_number, program_id);
 
         if new_commitments_account.key != &new_pda {
             return Err(ProgramError::InvalidSeeds);
@@ -358,6 +358,7 @@ pub fn process_transfer_asset(
             ],
         )?;
 
+        // insert nullifiers to newly created tree
         inserted_tree.insert_nullifiers(inserted_nullifiers);
         let mut new_commitments_data = &mut new_commitments_account.data.borrow_mut()[..];
 
@@ -366,10 +367,13 @@ pub fn process_transfer_asset(
         match result {
             Ok(resp) => {
                 // update tree
-                resp.commitments_data.serialize(&mut new_commitments_data)?
+                resp.commitments_data.serialize(&mut new_commitments_data)?;
+
+                start_position = resp.commitments_data.next_leaf_index as u64;
             }
             Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
         }
+
     } else {
         inserted_tree.insert_nullifiers(inserted_nullifiers);
         // insert leaf into tree
@@ -377,13 +381,23 @@ pub fn process_transfer_asset(
         match result {
             Ok(resp) => {
                 // update tree
-                resp.commitments_data.serialize(&mut commitments_acc_data)?
+                resp.commitments_data.serialize(&mut commitments_acc_data)?;
+
+                start_position = resp.commitments_data.next_leaf_index as u64;
             }
             Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
         }
     }
 
     // emit event
+    let event = TransferEvent {
+        start_position,
+        tree_number: current_tree_number,
+        commitments: request.encrypted_commitments.clone(),
+        commitment_cipher_text: request.commitment_cipher_text.clone(),
+    };
+    let serialize_event = borsh::to_vec(&event)?;
+    sol_log_data(&[b"transfer_event", &serialize_event]);
 
     Ok(())
 }
@@ -405,6 +419,10 @@ pub fn process_withdraw_asset(
     let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
 
+    if commitments_account.owner != program_id {
+        return Err(ProgramError::IncorrectProgramId);
+    }
+
     // Ensure the user_wallet signed the transaction
     if !user_wallet.is_signer {
         return Err(ProgramError::MissingRequiredSignature);
@@ -413,7 +431,6 @@ pub fn process_withdraw_asset(
 
     // ------------------ verify logic end ---------------------- //
 
-    // TODO: create nullifier adn check if nullifier already exists
     // Derive the PDA for the commitments account
     let (account_pda, _bump_seed) = derive_pda(request.metadata.tree_number, program_id);
     // Ensure the provided new_account is the correct PDA
@@ -424,6 +441,7 @@ pub fn process_withdraw_asset(
     let mut commitments_acc_data = &mut commitments_account.data.borrow_mut()[..];
     let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> = CommitmentsAccount::try_from_slice(&commitments_acc_data)?;
 
+    // check if nullifier already exists
     for idx in 0..request.nullifiers.len() {
         if inserted_tree.check_nullifier(&request.nullifiers[idx]) {
             return Err(DarksolError::UtxoAlreadySpent.into());

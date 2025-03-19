@@ -177,24 +177,29 @@ impl DepositEvent {
 #[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
 pub struct CommitmentCipherText {
     encrypted_text: Vec<Vec<u8>>,
-    shield_key: Vec<u8>,
+    encrypted_sender_key: Vec<u8>,
+    encrypted_view_key: Vec<u8>,
 }
 
 impl clone::Clone for CommitmentCipherText {
     fn clone(&self) -> CommitmentCipherText {
         return CommitmentCipherText {
             encrypted_text: self.encrypted_text.clone(),
-            shield_key: self.shield_key.clone()
+            encrypted_sender_key: self.encrypted_sender_key.clone(),
+            encrypted_view_key: self.encrypted_view_key.clone(),
         };
-    }
+    } 
 }
 
 // for js client support 
 #[wasm_bindgen]
 impl CommitmentCipherText {
     #[wasm_bindgen(constructor)]
-    pub fn new(shield_key: Vec<u8>, ) -> Self {
-        CommitmentCipherText { shield_key, encrypted_text: Vec::new() }
+    pub fn new(encrypted_sender_key: Vec<u8>, encrypted_view_key: Vec<u8>) -> Self {
+        CommitmentCipherText { 
+            encrypted_sender_key, 
+            encrypted_view_key,
+            encrypted_text: Vec::new() }
     }
 
     #[wasm_bindgen]
@@ -220,13 +225,14 @@ pub struct TransferRequest {
     encrypted_commitments: Vec<Vec<u8>>, // list of newly generated commitments
     nullifiers: Vec<Vec<u8>>, // nullifiers indicates spent UTXO
     metadata: RequestMetaData,
+    commitment_cipher_text: Vec<CommitmentCipherText>,
 }
 
 #[wasm_bindgen]
 impl TransferRequest {
     #[wasm_bindgen(constructor)]
-    pub fn new(proof: Vec<u8>, tree_number: u64) -> Self {
-        TransferRequest { proof, encrypted_commitments: Vec::new(), nullifiers: Vec::new(), metadata: RequestMetaData::new(tree_number) }
+    pub fn new(proof: Vec<u8>, tree_number: u64, commitment_cipher_text: Vec<CommitmentCipherText>,) -> Self {
+        TransferRequest { proof, encrypted_commitments: Vec::new(), nullifiers: Vec::new(), metadata: RequestMetaData::new(tree_number), commitment_cipher_text }
     }
 
     #[wasm_bindgen]
@@ -284,7 +290,7 @@ pub struct TransferEvent {
     tree_number: u64,
     start_position: u64,
     commitments: Vec<Vec<u8>>,
-    commitment_cipher_text: CommitmentCipherText,
+    commitment_cipher_text: Vec<CommitmentCipherText>,
 }
 
 
@@ -292,7 +298,7 @@ pub struct TransferEvent {
 #[wasm_bindgen]
 impl TransferEvent {
     #[wasm_bindgen]
-    pub fn new(start_position: u64, tree_number: u64, commitment_cipher_text: CommitmentCipherText) -> Self {
+    pub fn new(start_position: u64, tree_number: u64, commitment_cipher_text: Vec<CommitmentCipherText>) -> Self {
         TransferEvent {
             start_position,
             tree_number,
