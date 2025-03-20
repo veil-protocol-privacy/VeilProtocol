@@ -1,6 +1,6 @@
 use crate::merkle::CommitmentsAccount;
 use std::collections::HashMap;
-use crate::{derive_pda, fetch_mint_address, DepositEvent, DepositRequest, TransferEvent, TransferRequest, WithdrawEvent, WithdrawRequest};
+use crate::{derive_pda, fetch_mint_address, DepositEvent, DepositRequest, NullifierEvent, TransferEvent, TransferRequest, WithdrawEvent, WithdrawRequest};
 use crate::{
     error::DarksolError,
     merkle::hash_precommits,
@@ -399,6 +399,12 @@ pub fn process_transfer_asset(
     let serialize_event = borsh::to_vec(&event)?;
     sol_log_data(&[b"transfer_event", &serialize_event]);
 
+    let nullifier_event = NullifierEvent {
+        nullifiers: request.nullifiers.clone(),
+    };
+    let nullifier_serialize_event = borsh::to_vec(&nullifier_event)?;
+    sol_log_data(&[b"transfer_event", &nullifier_serialize_event]);
+
     Ok(())
 }
 
@@ -474,6 +480,13 @@ pub fn process_withdraw_asset(
     };
     let serialize_event = borsh::to_vec(&event)?;
     sol_log_data(&[b"transfer_event", &serialize_event]);
+
+    let nullifier_event = NullifierEvent {
+        nullifiers: request.nullifiers.clone(),
+    };
+    let nullifier_serialize_event = borsh::to_vec(&nullifier_event)?;
+    sol_log_data(&[b"transfer_event", &nullifier_serialize_event]);
+
 
     Ok(())
 }
