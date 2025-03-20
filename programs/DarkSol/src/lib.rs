@@ -7,8 +7,11 @@ pub mod state;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use primitive_types::U256;
-use solana_program::{account_info::AccountInfo, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey};
-use spl_token::state::Account as TokenAccount;
+use solana_program::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
+use spl_token::{
+    state::Account as TokenAccount,
+    solana_program::program_pack::Pack,
+};
 use wasm_bindgen::prelude::*;
 use std::clone;
 use serde::{Serialize, Deserialize};
@@ -176,6 +179,7 @@ pub struct CommitmentCipherText {
     encrypted_text: Vec<Vec<u8>>,
     encrypted_sender_key: Vec<u8>,
     encrypted_view_key: Vec<u8>,
+    
 }
 
 impl clone::Clone for CommitmentCipherText {
