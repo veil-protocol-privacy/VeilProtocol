@@ -403,7 +403,7 @@ pub fn process_transfer_asset(
         nullifiers: request.nullifiers.clone(),
     };
     let nullifier_serialize_event = borsh::to_vec(&nullifier_event)?;
-    sol_log_data(&[b"transfer_event", &nullifier_serialize_event]);
+    sol_log_data(&[b"nullifiers_event", &nullifier_serialize_event]);
 
     Ok(())
 }
@@ -479,13 +479,13 @@ pub fn process_withdraw_asset(
         token_mint_address: fetch_mint_address(user_token_account)?,
     };
     let serialize_event = borsh::to_vec(&event)?;
-    sol_log_data(&[b"transfer_event", &serialize_event]);
+    sol_log_data(&[b"withdraw_event", &serialize_event]);
 
     let nullifier_event = NullifierEvent {
         nullifiers: request.nullifiers.clone(),
     };
     let nullifier_serialize_event = borsh::to_vec(&nullifier_event)?;
-    sol_log_data(&[b"transfer_event", &nullifier_serialize_event]);
+    sol_log_data(&[b"nullifiers_event", &nullifier_serialize_event]);
 
 
     Ok(())
