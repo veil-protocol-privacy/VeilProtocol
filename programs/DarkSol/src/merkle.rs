@@ -20,7 +20,7 @@ pub fn hash_precommits(pre_commitments: PreCommitments) -> Vec<u8> {
 
     let mut encrypted_commitments = [0u8; 32];
     encrypted_commitments.copy_from_slice(&pre_commitments.encrypted_commitments);
-    Vec::from(poseidon_hash(Felt::from_bytes_le(&bytes), Felt::from_bytes_be(&encrypted_commitments)).to_bytes_be())
+    Vec::from(poseidon_hash(Felt::from_bytes_be(&encrypted_commitments), pre_commitments.token_id.to_bytes(), Felt::from_bytes_le(&bytes)).to_bytes_be())
 }
 
 pub fn poseidon(

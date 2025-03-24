@@ -30,6 +30,7 @@ use spl_associated_token_account::instruction::create_associated_token_account;
 
 // transfer_token_in deposit user fund into contract owned account.
 // Create a new token account for the deposit account if it's not initialized yet
+// TODO: handle both native and spl token transfer
 fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> ProgramResult {
     let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
@@ -118,13 +119,14 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
     Ok(())
 }
 
+// TODO: handle both native and spl token transfer 
 fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> ProgramResult {
     let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
     let funding_account = next_account_info(accounts_iter)?;
     let user_wallet = next_account_info(accounts_iter)?; // User's SOL wallet (payer)
     let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
-    let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
+    let pda_token_account  = next_account_info(accounts_iter)?; // PDA token account
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
 
     // Derive PDA funding account to pay for the new account
