@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+
 spl-associated-token-account = { git = "https://github.com/veil-protocol-privacy/associated-token-account"}
-spl-token = { git = "https://github.com/solana-program/token", features = [ "no-entrypoint" ] }
-solana-program = "2.2.0"
 starknet-crypto = { git = "https://github.com/veil-protocol-privacy/starknet-rs", tag = "starknet-crypto/v0.7.4-solana" }
 primitive-types = "0.12"
+solana-program = "2.2.1"
+solana-poseidon = "2.2.4"
+spl-token = { version="8.0.0", features = [ "no-entrypoint" ] }
 
 ark-std = "0.5"
 ark-bn254 = "0.5"
