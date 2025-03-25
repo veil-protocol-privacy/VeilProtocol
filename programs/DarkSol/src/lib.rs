@@ -39,14 +39,14 @@ pub fn derive_pda(value: u64, program_id: &Pubkey) -> (Pubkey, u8) {
 #[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
 pub struct PreCommitments {
     nullifier_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
-    token_id: &Pubkey,
+    token_id: String,
     value: u64,                     // amount
 }
 
 impl clone::Clone for PreCommitments {
     fn clone(&self) -> PreCommitments {
         return PreCommitments {
-            nullifier_pubkey: self.encrypted_commitments.clone(),
+            nullifier_pubkey: self.nullifier_pubkey.clone(),
             value: self.value.clone(),
             token_id: self.token_id.clone(),
         };
@@ -57,7 +57,7 @@ impl clone::Clone for PreCommitments {
 #[wasm_bindgen]
 impl PreCommitments {
     #[wasm_bindgen(constructor)]
-    pub fn new(value: u64, token_id: &Pubkey, nullifier_pubkey: Vec<u8>) -> Self {
+    pub fn new(value: u64, token_id: String, nullifier_pubkey: Vec<u8>) -> Self {
         PreCommitments {
             nullifier_pubkey,
             value,
@@ -78,10 +78,11 @@ impl PreCommitments {
 }
 
 #[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct ShieldCipherText {
-    encrypted_text: Vec<Vec<u8>>,
+    encrypted_text: Vec<u8>,
     shield_key: Vec<u8>,
+    nonce: Vec<u8>,
 }
 
 impl clone::Clone for ShieldCipherText {
@@ -89,6 +90,7 @@ impl clone::Clone for ShieldCipherText {
         return ShieldCipherText {
             encrypted_text: self.encrypted_text.clone(),
             shield_key: self.shield_key.clone(),
+            nonce: self.nonce.clone(),
         };
     }
 }
@@ -97,26 +99,23 @@ impl clone::Clone for ShieldCipherText {
 #[wasm_bindgen]
 impl ShieldCipherText {
     #[wasm_bindgen(constructor)]
-    pub fn new(shield_key: Vec<u8>) -> Self {
+    pub fn new(shield_key: Vec<u8>, encrypted_text: Vec<u8>, nonce: Vec<u8>) -> Self {
         ShieldCipherText {
             shield_key,
-            encrypted_text: Vec::new(),
+            encrypted_text,
+            nonce,
         }
     }
 
     #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<ShieldCipherText, JsValue> {
-        from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
+    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
     }
 
     #[wasm_bindgen]
-    pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
-        to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
-
-    #[wasm_bindgen]
-    pub fn push_data(&mut self, value: Vec<u8>) {
-        self.encrypted_text.push(value);
+    pub fn deserialize(data: &[u8]) -> Result<ShieldCipherText, JsValue> {
+        borsh::from_slice(data)
+            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
     }
 }
 
@@ -134,7 +133,6 @@ impl DepositRequest {
     pub fn new(
         pre_commitments: PreCommitments,
         shield_cipher_text: ShieldCipherText,
-        transfer_type: TransferType,
     ) -> Self {
         DepositRequest {
             pre_commitments,
@@ -197,10 +195,11 @@ impl DepositEvent {
 #[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
 pub struct CommitmentCipherText {
-    ciphertext: Vec<Vec<u8>>,
+    ciphertext: Vec<u8>,
     encrypted_sender_key: Vec<u8>,
     encrypted_view_key: Vec<u8>,
-    memo: Vec<u8>
+    nonce: Vec<u8>,
+    memo: Vec<u8>,
 }
 
 impl clone::Clone for CommitmentCipherText {
@@ -210,6 +209,7 @@ impl clone::Clone for CommitmentCipherText {
             encrypted_sender_key: self.encrypted_sender_key.clone(),
             encrypted_view_key: self.encrypted_view_key.clone(),
             memo: self.memo.clone(),
+            nonce: self.nonce.clone(),
         };
     }
 }
@@ -218,28 +218,25 @@ impl clone::Clone for CommitmentCipherText {
 #[wasm_bindgen]
 impl CommitmentCipherText {
     #[wasm_bindgen(constructor)]
-    pub fn new(encrypted_sender_key: Vec<u8>, encrypted_view_key: Vec<u8>, memo: Vec<u8>) -> Self {
+    pub fn new(encrypted_sender_key: Vec<u8>,ciphertext: Vec<u8> , encrypted_view_key: Vec<u8>, nonce: Vec<u8>, memo: Vec<u8>) -> Self {
         CommitmentCipherText {
             encrypted_sender_key,
             encrypted_view_key,
-            ciphertext: Vec::new(),
+            ciphertext,
+            nonce,
             memo,
         }
     }
 
     #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<ShieldCipherText, JsValue> {
-        from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
+    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
     }
 
     #[wasm_bindgen]
-    pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
-        to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
-
-    #[wasm_bindgen]
-    pub fn push_data(&mut self, value: Vec<u8>) {
-        self.ciphertext.push(value);
+    pub fn deserialize(data: &[u8]) -> Result<CommitmentCipherText, JsValue> {
+        borsh::from_slice(data)
+            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
     }
 }
 
@@ -274,7 +271,7 @@ impl TransferRequest {
     }
 
     #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<ShieldCipherText, JsValue> {
+    pub fn from_js_value(js_value: JsValue) -> Result<TransferRequest, JsValue> {
         from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
@@ -375,7 +372,7 @@ pub struct WithdrawRequest {
 #[wasm_bindgen]
 impl WithdrawRequest {
     #[wasm_bindgen(constructor)]
-    pub fn new(proof: Vec<u8>, tree_number: u64, amount: u64, token_id: &Pubkey) -> Self {
+    pub fn new(proof: Vec<u8>, tree_number: u64, amount: u64, token_id: String) -> Self {
         WithdrawRequest {
             proof,
             nullifiers: Vec::new(),
@@ -386,7 +383,7 @@ impl WithdrawRequest {
     }
 
     #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<ShieldCipherText, JsValue> {
+    pub fn from_js_value(js_value: JsValue) -> Result<WithdrawRequest, JsValue> {
         from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
@@ -459,7 +456,7 @@ impl NullifierEvent {
     }
 
     #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<ShieldCipherText, JsValue> {
+    pub fn from_js_value(js_value: JsValue) -> Result<NullifierEvent, JsValue> {
         from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 

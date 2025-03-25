@@ -20,13 +20,12 @@ use solana_program::{
     system_instruction,
     sysvar::Sysvar,
 };
+use spl_associated_token_account::get_associated_token_address;
 use spl_token::{
     instruction::{initialize_account, transfer as spl_transfer},
     state::Account as TokenAccount,
     solana_program::program_pack::Pack,
 };
-use spl_associated_token_account::instruction::create_associated_token_account;
-
 
 // transfer_token_in deposit user fund into contract owned account.
 // Create a new token account for the deposit account if it's not initialized yet
@@ -49,7 +48,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
         return Err(ProgramError::InvalidSeeds);
     }
 
-    let ata_pubkey = get_associated_token_address(funding_pda, mint_account.key);
+    let ata_pubkey = get_associated_token_address(&funding_pda, mint_account.key);
     if pda_token_account.key != &ata_pubkey {
         return Err(ProgramError::InvalidSeeds);
     }
