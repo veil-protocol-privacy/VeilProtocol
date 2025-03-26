@@ -39,7 +39,7 @@ pub fn derive_pda(value: u64, program_id: &Pubkey) -> (Pubkey, u8) {
 #[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
 pub struct PreCommitments {
     nullifier_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
-    token_id: String,
+    token_id: Vec<u8>,
     value: u64,                     // amount
 }
 
@@ -57,7 +57,7 @@ impl clone::Clone for PreCommitments {
 #[wasm_bindgen]
 impl PreCommitments {
     #[wasm_bindgen(constructor)]
-    pub fn new(value: u64, token_id: String, nullifier_pubkey: Vec<u8>) -> Self {
+    pub fn new(value: u64, token_id: Vec<u8>, nullifier_pubkey: Vec<u8>) -> Self {
         PreCommitments {
             nullifier_pubkey,
             value,
@@ -372,7 +372,7 @@ pub struct WithdrawRequest {
 #[wasm_bindgen]
 impl WithdrawRequest {
     #[wasm_bindgen(constructor)]
-    pub fn new(proof: Vec<u8>, tree_number: u64, amount: u64, token_id: String) -> Self {
+    pub fn new(proof: Vec<u8>, tree_number: u64, amount: u64, token_id: Vec<u8>) -> Self {
         WithdrawRequest {
             proof,
             nullifiers: Vec::new(),

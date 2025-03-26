@@ -10,38 +10,40 @@ fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Vec<u8> {
     let mut right_bytes = [0u8; 32];
     right_bytes.copy_from_slice(&right);
 
-    Vec::from(poseidon_hash(Felt::from_bytes_be(&left_bytes), Felt::from_bytes_be(&right_bytes)).to_bytes_be())
+    Vec::from(
+        poseidon_hash(
+            Felt::from_bytes_be(&left_bytes),
+            Felt::from_bytes_be(&right_bytes),
+        )
+        .to_bytes_be(),
+    )
 }
 
 pub fn hash_precommits(pre_commitments: PreCommitments) -> Vec<u8> {
-    let value_in_byte = u64::to_le_bytes(pre_commitments.value);
-    let mut bytes = [0u8; 32];
-    bytes[24..].copy_from_slice(&value_in_byte[..]);
+    let amount: Vec<u8> = pre_commitments.value.to_le_bytes().to_vec();
 
-    let mut nullifier_pubkey = [0u8; 32];
-    nullifier_pubkey.copy_from_slice(&pre_commitments.nullifier_pubkey);
-    let felt_nullifier_pubkey = Felt::from_bytes_be(&nullifier_pubkey);
-    let felt_token_id = Felt::from_bytes_be_slice(pre_commitments.token_id.as_bytes());
-    let felt_value = Felt::from_bytes_le(&bytes);
-
-    let inputs = vec![&felt_nullifier_pubkey, &felt_token_id, &felt_value];
-    Vec::from(poseidon_hash_many(inputs).to_bytes_be())
+    poseidon(vec![
+        pre_commitments.nullifier_pubkey.as_slice(),
+        pre_commitments.token_id.as_slice(),
+        amount.as_slice(),
+    ])
 }
 
-pub fn poseidon(
-    inputs: Vec<&[u8]>
-) -> Vec<u8> {
-    let inputs = inputs.iter().map(|input| {
-        let mut bytes = [0u8; 32];
-        if input.len() < 32 {
-            // fill from the last index
-            let start = 32 - input.len();
-            bytes[start..].copy_from_slice(&input[..]);
-        } else {
-            bytes.copy_from_slice(input);
-        };
-        Felt::from_bytes_be(&bytes)
-    }).collect::<Vec<Felt>>();
+pub fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
+    let inputs = inputs
+        .iter()
+        .map(|input| {
+            let mut bytes = [0u8; 32];
+            if input.len() < 32 {
+                // fill from the last index
+                let start = 32 - input.len();
+                bytes[start..].copy_from_slice(&input[..]);
+            } else {
+                bytes.copy_from_slice(input);
+            };
+            Felt::from_bytes_be(&bytes)
+        })
+        .collect::<Vec<Felt>>();
     Vec::from(poseidon_hash_many(inputs.as_slice()).to_bytes_be())
 }
 
@@ -170,7 +172,8 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
                 next_level_hash_index = (level_insertion_index >> 1) - next_level_start_index;
 
                 // Calculate the hash for the next level
-                commitments[next_level_hash_index] = hash_left_right(commitments[insertion_element].clone(), right);
+                commitments[next_level_hash_index] =
+                    hash_left_right(commitments[insertion_element].clone(), right);
 
                 // Increment level insertion index
                 level_insertion_index += 2;
@@ -185,9 +188,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
 
         // Update the Merkle tree root
         self.merkle_root = commitments[0].clone();
-        self
-            .root_history
-            .insert(self.merkle_root.clone(), true);
+        self.root_history.insert(self.merkle_root.clone(), true);
 
         Ok(InsertResp {
             commitments_data: self.clone(),
@@ -198,7 +199,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
         let base: usize = 2; // an explicit type is required
                              // if exceeding max tree depth create a new tree
         if commitments_length + self.next_leaf_index > base.pow(TREE_DEPTH as u32) {
-            return true
+            return true;
         }
 
         return false;
@@ -209,24 +210,15 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
         self.merkle_root.clone()
     }
 
-    pub fn insert_nullifier(
-        &mut self,
-        nullifier: Vec<u8>,
-    ) {
+    pub fn insert_nullifier(&mut self, nullifier: Vec<u8>) {
         self.nullifiers.insert(nullifier, true);
-    } 
+    }
 
-    pub fn insert_nullifiers(
-        &mut self,
-        nullifiers: HashMap<Vec<u8>, bool>,
-    ) {
+    pub fn insert_nullifiers(&mut self, nullifiers: HashMap<Vec<u8>, bool>) {
         self.nullifiers.extend(nullifiers);
-    } 
+    }
 
-    pub fn check_nullifier(
-        &self,
-        nullifier: &Vec<u8>,
-    ) -> bool {
+    pub fn check_nullifier(&self, nullifier: &Vec<u8>) -> bool {
         self.nullifiers.contains_key(nullifier)
     }
 }
@@ -251,7 +243,7 @@ mod tests {
         assert_eq!(zero_tree.merkle_root, level_zero);
         assert!(zero_tree.root_history.contains_key(&level_zero));
     }
-    
+
     #[test]
     fn test_insert() {
         const TREE_DEPTH: usize = 5;
@@ -272,7 +264,7 @@ mod tests {
                 tree.insert_commitments(&mut insert_list).unwrap();
             }
 
-            for i in  ((16 / gap) * gap)..16 {
+            for i in ((16 / gap) * gap)..16 {
                 let hash_i = poseidon(vec![&[i]]);
                 let mut insert_list = vec![hash_i];
                 tree.insert_commitments(&mut insert_list).unwrap();
