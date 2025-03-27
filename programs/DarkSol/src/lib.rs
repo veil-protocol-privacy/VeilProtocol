@@ -197,7 +197,7 @@ impl DepositEvent {
 pub struct CommitmentCipherText {
     ciphertext: Vec<u8>,
     encrypted_sender_key: Vec<u8>,
-    encrypted_view_key: Vec<u8>,
+    encrypted_receiver_key: Vec<u8>,
     nonce: Vec<u8>,
     memo: Vec<u8>,
 }
@@ -207,7 +207,7 @@ impl clone::Clone for CommitmentCipherText {
         return CommitmentCipherText {
             ciphertext: self.ciphertext.clone(),
             encrypted_sender_key: self.encrypted_sender_key.clone(),
-            encrypted_view_key: self.encrypted_view_key.clone(),
+            encrypted_receiver_key: self.encrypted_receiver_key.clone(),
             memo: self.memo.clone(),
             nonce: self.nonce.clone(),
         };
@@ -218,10 +218,10 @@ impl clone::Clone for CommitmentCipherText {
 #[wasm_bindgen]
 impl CommitmentCipherText {
     #[wasm_bindgen(constructor)]
-    pub fn new(encrypted_sender_key: Vec<u8>,ciphertext: Vec<u8> , encrypted_view_key: Vec<u8>, nonce: Vec<u8>, memo: Vec<u8>) -> Self {
+    pub fn new(encrypted_sender_key: Vec<u8>,ciphertext: Vec<u8> , encrypted_receiver_key: Vec<u8>, nonce: Vec<u8>, memo: Vec<u8>) -> Self {
         CommitmentCipherText {
             encrypted_sender_key,
-            encrypted_view_key,
+            encrypted_receiver_key,
             ciphertext,
             nonce,
             memo,
