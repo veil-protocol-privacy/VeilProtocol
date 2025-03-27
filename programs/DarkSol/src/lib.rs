@@ -40,7 +40,7 @@ pub fn derive_pda(value: u64, program_id: &Pubkey) -> (Pubkey, u8) {
 pub struct PreCommitments {
     nullifier_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
     token_id: Vec<u8>,
-    value: u64,                     // amount
+    value: u64, // amount
 }
 
 impl clone::Clone for PreCommitments {
@@ -130,10 +130,7 @@ pub struct DepositRequest {
 #[wasm_bindgen]
 impl DepositRequest {
     #[wasm_bindgen(constructor)]
-    pub fn new(
-        pre_commitments: PreCommitments,
-        shield_cipher_text: ShieldCipherText,
-    ) -> Self {
+    pub fn new(pre_commitments: PreCommitments, shield_cipher_text: ShieldCipherText) -> Self {
         DepositRequest {
             pre_commitments,
             shield_cipher_text,
@@ -218,7 +215,13 @@ impl clone::Clone for CommitmentCipherText {
 #[wasm_bindgen]
 impl CommitmentCipherText {
     #[wasm_bindgen(constructor)]
-    pub fn new(encrypted_sender_key: Vec<u8>,ciphertext: Vec<u8> , encrypted_receiver_key: Vec<u8>, nonce: Vec<u8>, memo: Vec<u8>) -> Self {
+    pub fn new(
+        encrypted_sender_key: Vec<u8>,
+        ciphertext: Vec<u8>,
+        encrypted_receiver_key: Vec<u8>,
+        nonce: Vec<u8>,
+        memo: Vec<u8>,
+    ) -> Self {
         CommitmentCipherText {
             encrypted_sender_key,
             encrypted_receiver_key,
@@ -320,7 +323,7 @@ impl RequestMetaData {
 // TransferEvent defines log after transfer instruction
 #[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
-pub struct TransferEvent {
+pub struct TransactionEvent {
     tree_number: u64,
     start_position: u64,
     commitments: Vec<Vec<u8>>,
@@ -329,14 +332,14 @@ pub struct TransferEvent {
 
 // for js client support
 #[wasm_bindgen]
-impl TransferEvent {
+impl TransactionEvent {
     #[wasm_bindgen]
     pub fn new(
         start_position: u64,
         tree_number: u64,
         commitment_cipher_text: Vec<CommitmentCipherText>,
     ) -> Self {
-        TransferEvent {
+        TransactionEvent {
             start_position,
             tree_number,
             commitments: Vec::new(),
@@ -345,7 +348,7 @@ impl TransferEvent {
     }
 
     #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<TransferEvent, JsValue> {
+    pub fn from_js_value(js_value: JsValue) -> Result<TransactionEvent, JsValue> {
         from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
     }
 
@@ -364,21 +367,31 @@ impl TransferEvent {
 #[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
 pub struct WithdrawRequest {
     proof: Vec<u8>,
-    nullifiers: Vec<Vec<u8>>, // nullifiers indicates spent UTXO
+    encrypted_commitment: Vec<u8>, // list of newly generated commitment for the remain balance
+    nullifiers: Vec<Vec<u8>>,      // nullifiers indicates spent UTXO
     metadata: RequestMetaData,
     pre_commitments: PreCommitments,
+    commitment_cipher_text: CommitmentCipherText,
 }
 
 #[wasm_bindgen]
 impl WithdrawRequest {
     #[wasm_bindgen(constructor)]
-    pub fn new(proof: Vec<u8>, tree_number: u64, amount: u64, token_id: Vec<u8>) -> Self {
+    pub fn new(
+        proof: Vec<u8>,
+        tree_number: u64,
+        amount: u64,
+        token_id: Vec<u8>,
+        encrypted_commitment: Vec<u8>,
+        commitment_cipher_text: CommitmentCipherText,
+    ) -> Self {
         WithdrawRequest {
             proof,
+            encrypted_commitment,
             nullifiers: Vec::new(),
             metadata: RequestMetaData::new(tree_number),
             pre_commitments: PreCommitments::new(amount, token_id, Vec::new()), // no need to provide the encrypted value here
-            
+            commitment_cipher_text,
         }
     }
 
@@ -403,39 +416,6 @@ pub fn fetch_mint_address(token_account: &AccountInfo) -> Result<String, Program
     let token_account = TokenAccount::unpack(&token_data)?;
 
     Ok(token_account.mint.to_string())
-}
-
-// WithdrawEvent defines log after withdraw instruction
-#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
-pub struct WithdrawEvent {
-    receiver: String,
-    amount: u64,
-    token_mint_address: String,
-}
-
-// for js client support
-#[wasm_bindgen]
-impl WithdrawEvent {
-    #[wasm_bindgen]
-    pub fn new(receiver: String, amount: u64, token_mint_address: String) -> Self {
-        WithdrawEvent {
-            receiver,
-            amount,
-            token_mint_address,
-        }
-    }
-
-    #[wasm_bindgen]
-    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
-        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
-    }
-
-    #[wasm_bindgen]
-    pub fn deserialize(data: &[u8]) -> Result<WithdrawEvent, JsValue> {
-        borsh::from_slice(data)
-            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
-    }
 }
 
 // NullifierEvent defines log after adding new nullifers instruction
