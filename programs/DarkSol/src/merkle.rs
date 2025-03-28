@@ -210,6 +210,11 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
         self.merkle_root.clone()
     }
 
+    /// Get the Merkle root
+    pub fn has_root(&self, root: Vec<u8>) -> bool {
+        self.root_history.contains_key(&root)
+    }
+
     pub fn insert_nullifier(&mut self, nullifier: Vec<u8>) {
         self.nullifiers.insert(nullifier, true);
     }

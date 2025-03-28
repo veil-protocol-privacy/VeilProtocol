@@ -367,11 +367,12 @@ impl TransactionEvent {
 #[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
 pub struct WithdrawRequest {
     proof: Vec<u8>,
-    encrypted_commitment: Vec<u8>, // list of newly generated commitment for the remain balance
+    merkle_root: Vec<u8>,
+    encrypted_commitments: Vec<Vec<u8>>, // list of newly generated commitment for the remain balance
     nullifiers: Vec<Vec<u8>>,      // nullifiers indicates spent UTXO
     metadata: RequestMetaData,
     pre_commitments: PreCommitments,
-    commitment_cipher_text: CommitmentCipherText,
+    commitment_cipher_texts: Vec<CommitmentCipherText>,
 }
 
 #[wasm_bindgen]
@@ -379,19 +380,20 @@ impl WithdrawRequest {
     #[wasm_bindgen(constructor)]
     pub fn new(
         proof: Vec<u8>,
+        merkle_root: Vec<u8>,
         tree_number: u64,
         amount: u64,
         token_id: Vec<u8>,
-        encrypted_commitment: Vec<u8>,
-        commitment_cipher_text: CommitmentCipherText,
+        commitment_cipher_texts: Vec<CommitmentCipherText>,
     ) -> Self {
         WithdrawRequest {
             proof,
-            encrypted_commitment,
+            merkle_root,
+            encrypted_commitments: Vec::new(),
             nullifiers: Vec::new(),
             metadata: RequestMetaData::new(tree_number),
             pre_commitments: PreCommitments::new(amount, token_id, Vec::new()), // no need to provide the encrypted value here
-            commitment_cipher_text,
+            commitment_cipher_texts,
         }
     }
 
@@ -403,6 +405,11 @@ impl WithdrawRequest {
     #[wasm_bindgen]
     pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
         to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
+    }
+
+    #[wasm_bindgen]
+    pub fn push_encrypted_commitment(&mut self, value: Vec<u8>) {
+        self.encrypted_commitments.push(value);
     }
 
     #[wasm_bindgen]

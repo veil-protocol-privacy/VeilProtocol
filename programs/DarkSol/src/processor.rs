@@ -1,7 +1,7 @@
 use crate::merkle::CommitmentsAccount;
 use crate::{
-    derive_pda, fetch_mint_address, DepositEvent, DepositRequest, NullifierEvent, TransactionEvent,
-    TransferRequest, WithdrawRequest,
+    derive_pda, DepositEvent, DepositRequest, NullifierEvent, TransactionEvent, TransferRequest,
+    WithdrawRequest,
 };
 use crate::{
     error::DarksolError,
@@ -28,7 +28,6 @@ use spl_token::{
     solana_program::program_pack::Pack,
     state::Account as TokenAccount,
 };
-use std::collections::HashMap;
 
 // transfer_token_in deposit user fund into contract owned account.
 // Create a new token account for the deposit account if it's not initialized yet
@@ -349,6 +348,11 @@ pub fn process_transfer_asset(
 
     // TODO: verify proof
 
+    // check if merkle root is valid
+    if !spent_tree.has_root(request.merkle_root) {
+        return Err(DarksolError::InvalidMerkelRoot.into());
+    }
+
     // ------------------- verify logic end here ------------------------ //
 
     // check if nullifiers already exists if not added to the list
@@ -460,14 +464,6 @@ pub fn process_withdraw_asset(
         return Err(ProgramError::IncorrectProgramId);
     }
 
-    // Ensure the user_wallet signed the transaction
-    if !user_wallet.is_signer {
-        return Err(ProgramError::MissingRequiredSignature);
-    }
-    // TODO: verify proof
-
-    // ------------------ verify logic end ---------------------- //
-
     // Derive the PDA for the commitments account
     let (account_pda, _bump_seed) = derive_pda(request.metadata.tree_number, program_id);
     // Ensure the provided new_account is the correct PDA
@@ -475,9 +471,23 @@ pub fn process_withdraw_asset(
         return Err(ProgramError::InvalidSeeds);
     }
 
+    // Ensure the user_wallet signed the transaction
+    if !user_wallet.is_signer {
+        return Err(ProgramError::MissingRequiredSignature);
+    }
+
     let mut commitments_acc_data = &mut spent_commitments_account.data.borrow_mut()[..];
     let mut spent_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::try_from_slice(&commitments_acc_data)?;
+
+    // TODO: verify proof
+
+    // check if merkle root is valid
+    if !spent_tree.has_root(request.merkle_root) {
+        return Err(DarksolError::InvalidMerkelRoot.into());
+    }
+
+    // ------------------ verify logic end ---------------------- //
 
     // check if nullifier already exists
     for idx in 0..request.nullifiers.len() {
@@ -491,7 +501,7 @@ pub fn process_withdraw_asset(
     let mut start_position: u64 = spent_tree.next_leaf_index as u64;
     let mut tree_number: u64 = request.metadata.tree_number;
 
-    if !request.encrypted_commitment.is_empty() {
+    if !request.encrypted_commitments.is_empty() {
         let current_commitment_account = next_account_info(accounts_iter)?; // current tree
         let commitments_manager_account = next_account_info(accounts_iter)?;
 
@@ -543,7 +553,7 @@ pub fn process_withdraw_asset(
 
             // insert leaf into tree
             let result =
-                inserted_tree.insert_commitments(&mut vec![request.encrypted_commitment.clone()]);
+                inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone());
             match result {
                 Ok(resp) => {
                     // update tree
@@ -557,7 +567,7 @@ pub fn process_withdraw_asset(
         } else {
             // insert leaf into tree
             let result =
-                inserted_tree.insert_commitments(&mut vec![request.encrypted_commitment.clone()]);
+                inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone());
             match result {
                 Ok(resp) => {
                     // update tree
@@ -591,8 +601,8 @@ pub fn process_withdraw_asset(
     let event = TransactionEvent {
         start_position,
         tree_number,
-        commitments: vec![request.encrypted_commitment.clone()],
-        commitment_cipher_text: vec![request.commitment_cipher_text.clone()],
+        commitments: request.encrypted_commitments.clone(),
+        commitment_cipher_text: request.commitment_cipher_texts.clone(),
     };
 
     let serialize_event = borsh::to_vec(&event)?;
