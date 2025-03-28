@@ -26,7 +26,11 @@ pub enum DarksolError {
 
     // 5
     /// UTXO already spent
-    UtxoAlreadySpent
+    UtxoAlreadySpent,
+
+    // 6
+    /// invalid merkel root
+    InvalidMerkelRoot
 }
 
 impl From<DarksolError> for ProgramError {

@@ -18,11 +18,11 @@ pub struct CommitmentsManagerAccount {
     pub incremental_tree_number: u64,
 }
 
-// initialize_commitments create a new commiments manager account
+// initialize_commitments_manager create a new commiments manager account
 // with an new commitments_account
 //
 // should only be call once when the contract is deployed
-pub fn initialize_commitments(
+pub fn initialize_commitments_manager(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
 ) -> Result<(), ProgramError> {

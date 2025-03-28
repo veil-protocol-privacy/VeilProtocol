@@ -1,43 +1,50 @@
-use crate::error::DarksolError;
 use crate::{u256_to_bytes, PreCommitments, ZERO_VALUE};
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_poseidon::hashv;
-use solana_poseidon::{Endianness, Parameters, PoseidonHash};
-use solana_program::program_error::ProgramError;
+use starknet_crypto::{poseidon_hash, poseidon_hash_many, Felt};
 use std::collections::HashMap;
 
-fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Result<Vec<u8>, String> {
-    let result: Result<PoseidonHash, solana_poseidon::PoseidonSyscallError> =
-        hashv(Parameters::Bn254X5, Endianness::BigEndian, &[&left, &right]);
+fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Vec<u8> {
+    let mut left_bytes = [0u8; 32];
+    left_bytes.copy_from_slice(&left);
 
-    match result {
-        Ok(hash) => {
-            let bytes = hash.to_bytes();
-            return Ok(bytes.to_vec());
-        }
-        Err(err) => {
-            return Err(format!("fail to create hash: {}", err.to_string()));
-        }
-    }
+    let mut right_bytes = [0u8; 32];
+    right_bytes.copy_from_slice(&right);
+
+    Vec::from(
+        poseidon_hash(
+            Felt::from_bytes_be(&left_bytes),
+            Felt::from_bytes_be(&right_bytes),
+        )
+        .to_bytes_be(),
+    )
 }
 
-pub fn hash_precommits(pre_commitments: PreCommitments) -> Result<Vec<u8>, ProgramError> {
-    let value_in_byte = u64::to_le_bytes(pre_commitments.value);
-    let result: Result<PoseidonHash, solana_poseidon::PoseidonSyscallError> = hashv(
-        Parameters::Bn254X5,
-        Endianness::BigEndian,
-        &[&pre_commitments.encrypted_commitments, &value_in_byte],
-    );
+pub fn hash_precommits(pre_commitments: PreCommitments) -> Vec<u8> {
+    let amount: Vec<u8> = pre_commitments.value.to_le_bytes().to_vec();
 
-    match result {
-        Ok(hash) => {
-            let bytes = hash.to_bytes();
-            return Ok(bytes.to_vec());
-        }
-        Err(_err) => {
-            return Err(DarksolError::FailedCreateCommitmentHash.into());
-        }
-    }
+    poseidon(vec![
+        pre_commitments.nullifier_pubkey.as_slice(),
+        pre_commitments.token_id.as_slice(),
+        amount.as_slice(),
+    ])
+}
+
+pub fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
+    let inputs = inputs
+        .iter()
+        .map(|input| {
+            let mut bytes = [0u8; 32];
+            if input.len() < 32 {
+                // fill from the last index
+                let start = 32 - input.len();
+                bytes[start..].copy_from_slice(&input[..]);
+            } else {
+                bytes.copy_from_slice(input);
+            };
+            Felt::from_bytes_be(&bytes)
+        })
+        .collect::<Vec<Felt>>();
+    Vec::from(poseidon_hash_many(inputs.as_slice()).to_bytes_be())
 }
 
 // Batch Incremental Merkle Tree for commitments
@@ -79,7 +86,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
             filled_sub_trees.push(current_zero.clone());
 
             // Calculate the zero value for this level
-            current_zero = hash_left_right(current_zero.clone(), current_zero.clone()).unwrap();
+            current_zero = hash_left_right(current_zero.clone(), current_zero.clone());
         }
 
         // Now safely insert into the inner HashMap
@@ -137,7 +144,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
                 commitments[next_level_hash_index] = hash_left_right(
                     self.filled_sub_trees[level].clone(),
                     commitments[insertion_element].clone(),
-                )?;
+                );
 
                 // Increment
                 insertion_element += 1;
@@ -165,7 +172,8 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
                 next_level_hash_index = (level_insertion_index >> 1) - next_level_start_index;
 
                 // Calculate the hash for the next level
-                commitments[next_level_hash_index] = hash_left_right(commitments[insertion_element].clone(), right)?;
+                commitments[next_level_hash_index] =
+                    hash_left_right(commitments[insertion_element].clone(), right);
 
                 // Increment level insertion index
                 level_insertion_index += 2;
@@ -180,9 +188,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
 
         // Update the Merkle tree root
         self.merkle_root = commitments[0].clone();
-        self
-            .root_history
-            .insert(self.merkle_root.clone(), true);
+        self.root_history.insert(self.merkle_root.clone(), true);
 
         Ok(InsertResp {
             commitments_data: self.clone(),
@@ -193,7 +199,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
         let base: usize = 2; // an explicit type is required
                              // if exceeding max tree depth create a new tree
         if commitments_length + self.next_leaf_index > base.pow(TREE_DEPTH as u32) {
-            return true
+            return true;
         }
 
         return false;
@@ -204,24 +210,20 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
         self.merkle_root.clone()
     }
 
-    pub fn insert_nullifier(
-        &mut self,
-        nullifier: Vec<u8>,
-    ) {
+    /// Get the Merkle root
+    pub fn has_root(&self, root: Vec<u8>) -> bool {
+        self.root_history.contains_key(&root)
+    }
+
+    pub fn insert_nullifier(&mut self, nullifier: Vec<u8>) {
         self.nullifiers.insert(nullifier, true);
-    } 
+    }
 
-    pub fn insert_nullifiers(
-        &mut self,
-        nullifiers: HashMap<Vec<u8>, bool>,
-    ) {
+    pub fn insert_nullifiers(&mut self, nullifiers: HashMap<Vec<u8>, bool>) {
         self.nullifiers.extend(nullifiers);
-    } 
+    }
 
-    pub fn check_nullifier(
-        &self,
-        nullifier: &Vec<u8>,
-    ) -> bool {
+    pub fn check_nullifier(&self, nullifier: &Vec<u8>) -> bool {
         self.nullifiers.contains_key(nullifier)
     }
 }
@@ -230,9 +232,6 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
 mod tests {
     use super::*;
 
-    fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
-        hashv(Parameters::Bn254X5, Endianness::BigEndian, &inputs).unwrap().to_bytes().to_vec()
-    }
     #[test]
     fn test_zero_tree() {
         let zero_value = u256_to_bytes(ZERO_VALUE).to_vec();
@@ -243,13 +242,13 @@ mod tests {
             assert_eq!(zero_tree.zeros[i], level_zero);
             assert_eq!(zero_tree.filled_sub_trees[i], level_zero);
 
-            level_zero = hash_left_right(level_zero.clone(), level_zero.clone()).unwrap();
+            level_zero = hash_left_right(level_zero.clone(), level_zero.clone());
         }
 
         assert_eq!(zero_tree.merkle_root, level_zero);
         assert!(zero_tree.root_history.contains_key(&level_zero));
     }
-    
+
     #[test]
     fn test_insert() {
         const TREE_DEPTH: usize = 5;
@@ -270,7 +269,7 @@ mod tests {
                 tree.insert_commitments(&mut insert_list).unwrap();
             }
 
-            for i in  ((16 / gap) * gap)..16 {
+            for i in ((16 / gap) * gap)..16 {
                 let hash_i = poseidon(vec![&[i]]);
                 let mut insert_list = vec![hash_i];
                 tree.insert_commitments(&mut insert_list).unwrap();
