@@ -676,9 +676,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck_derive"
-version = "1.9.2"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ff22c2722516255d1823ce3cc4bc0b154dbc9364be5c905d6baa6eccbbc8774"
+checksum = "7ecc273b49b3205b83d648f0690daa588925572cc5063745bfe547fe7ec8e1a1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -857,15 +857,12 @@ dependencies = [
  "ethp",
  "hex",
  "primitive-types",
- "serde",
- "serde-wasm-bindgen",
  "sha3",
  "solana-poseidon",
  "solana-program",
  "spl-associated-token-account",
  "spl-token 8.0.0",
  "starknet-crypto",
- "wasm-bindgen",
 ]
 
 [[package]]
@@ -1390,9 +1387,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.21.1"
+version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d75b0bedcc4fe52caa0e03d9f1151a323e4aa5e2d78ba3580400cd3c9e2bc4bc"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "opaque-debug"
@@ -1738,17 +1735,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde-wasm-bindgen"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
-dependencies = [
- "js-sys",
- "serde",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "serde_bytes"
 version = "0.11.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1966,9 +1952,9 @@ dependencies = [
 
 [[package]]
 name = "solana-curve25519"
-version = "2.2.4"
+version = "2.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b3d15f1a893ced38529d44d7fe0d4348dc38c28fea13b6d6be5d13d438a441f"
+checksum = "91f23498bbf3ae4f22125a2f16f988a5a659628ea4949ca605a05191f91095d3"
 dependencies = [
  "bytemuck",
  "bytemuck_derive",
@@ -2258,9 +2244,9 @@ dependencies = [
 
 [[package]]
 name = "solana-poseidon"
-version = "2.2.4"
+version = "2.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d2908b48b3828bc04b752d1ff36122f5a06de043258da88df5f8ce64791d208"
+checksum = "bd6f45ab021dd9958420e0ec59d9740bcea05a10a1fa55f84c483bf7a42dcf48"
 dependencies = [
  "ark-bn254 0.4.0",
  "light-poseidon",
@@ -2721,9 +2707,9 @@ dependencies = [
 
 [[package]]
 name = "solana-zk-sdk"
-version = "2.2.4"
+version = "2.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71db02a2e496c58840077c96dd4ede61894a4e6053853cca6dcddbb73200fb77"
+checksum = "25f159f6daedab6cbd42d57945b1789f2f0d859c647dd611658227ae4330e4df"
 dependencies = [
  "aes-gcm-siv",
  "base64 0.22.1",
