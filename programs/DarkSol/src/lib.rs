@@ -37,9 +37,9 @@ pub fn derive_pda(value: u64, program_id: &Pubkey) -> (Pubkey, u8) {
 //#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct PreCommitments {
-    nullifier_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
-    token_id: Vec<u8>,
-    value: u64, // amount
+    pub nullifier_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
+    pub token_id: Vec<u8>,
+    pub value: u64, // amount
 }
 
 impl clone::Clone for PreCommitments {
@@ -79,9 +79,9 @@ impl PreCommitments {
 //#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct ShieldCipherText {
-    encrypted_text: Vec<u8>,
-    shield_key: Vec<u8>,
-    nonce: Vec<u8>,
+    pub encrypted_text: Vec<u8>,
+    pub shield_key: Vec<u8>,
+    pub nonce: Vec<u8>,
 }
 
 impl clone::Clone for ShieldCipherText {
@@ -152,10 +152,10 @@ impl DepositRequest {
 //#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct DepositEvent {
-    tree_number: u64,
-    start_position: u64,
-    pre_commitments: PreCommitments,
-    shield_cipher_text: ShieldCipherText,
+    pub tree_number: u64,
+    pub start_position: u64,
+    pub pre_commitments: PreCommitments,
+    pub shield_cipher_text: ShieldCipherText,
 }
 
 // for js client support
@@ -191,11 +191,11 @@ impl DepositEvent {
 //#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct CommitmentCipherText {
-    ciphertext: Vec<u8>,
-    encrypted_sender_key: Vec<u8>,
-    encrypted_receiver_key: Vec<u8>,
-    nonce: Vec<u8>,
-    memo: Vec<u8>,
+    pub ciphertext: Vec<u8>,
+    pub encrypted_sender_key: Vec<u8>,
+    pub encrypted_receiver_key: Vec<u8>,
+    pub nonce: Vec<u8>,
+    pub memo: Vec<u8>,
 }
 
 impl clone::Clone for CommitmentCipherText {
@@ -323,10 +323,10 @@ impl RequestMetaData {
 //#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct TransactionEvent {
-    tree_number: u64,
-    start_position: u64,
-    commitments: Vec<Vec<u8>>,
-    commitment_cipher_text: Vec<CommitmentCipherText>,
+    pub tree_number: u64,
+    pub start_position: u64,
+    pub commitments: Vec<Vec<u8>>,
+    pub commitment_cipher_text: Vec<CommitmentCipherText>,
 }
 
 // for js client support
@@ -428,7 +428,7 @@ pub fn fetch_mint_address(token_account: &AccountInfo) -> Result<String, Program
 //#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct NullifierEvent {
-    nullifiers: Vec<Vec<u8>>,
+    pub nullifiers: Vec<Vec<u8>>,
 }
 
 // for js client support
