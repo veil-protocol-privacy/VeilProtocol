@@ -2,7 +2,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint, entrypoint::ProgramResult, pubkey::Pubkey,
 };
 use crate::instruction::DarkSolInstruction;
-use crate::processor::{process_deposit_fund, process_transfer_asset, process_withdraw_asset};
+use crate::processor::{process_deposit_fund, process_initialize_account, process_transfer_asset, process_withdraw_asset};
 
 entrypoint!(process_instruction);
 
@@ -21,6 +21,7 @@ pub fn process_instruction(
         }
         DarkSolInstruction::Transfer { request } => process_transfer_asset(program_id, accounts, request)?,
         DarkSolInstruction::Withdraw { request } => process_withdraw_asset(program_id, accounts, request)?,
+        DarkSolInstruction::Initialize {} => process_initialize_account(program_id, accounts)?
     };
     Ok(())
 }

@@ -9,6 +9,7 @@ pub enum DarkSolInstruction {
     Deposit {request: DepositRequest},
     Transfer {request: TransferRequest},
     Withdraw {request: WithdrawRequest},
+    Initialize {},
 }
 
 impl DarkSolInstruction {
@@ -31,6 +32,9 @@ impl DarkSolInstruction {
             2 => {
                 let request: WithdrawRequest = WithdrawRequest::try_from_slice(rest)?;
                 Ok(Self::Withdraw { request })
+            } 
+            3 => {
+                Ok(Self::Initialize {})
             } 
             _ => Err(ProgramError::InvalidInstructionData),
         }
