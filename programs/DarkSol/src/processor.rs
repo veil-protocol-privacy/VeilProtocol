@@ -1,4 +1,5 @@
 use crate::merkle::CommitmentsAccount;
+use crate::state::initialize_commitments_manager;
 use crate::{
     derive_pda, DepositEvent, DepositRequest, NullifierEvent, TransactionEvent, TransferRequest,
     WithdrawRequest,
@@ -613,6 +614,15 @@ pub fn process_withdraw_asset(
     };
     let nullifier_serialize_event = borsh::to_vec(&nullifier_event)?;
     sol_log_data(&[b"nullifiers_event", &nullifier_serialize_event]);
+
+    Ok(())
+}
+
+pub fn process_initialize_account(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo]
+) -> ProgramResult {
+    initialize_commitments_manager(program_id, accounts)?;
 
     Ok(())
 }

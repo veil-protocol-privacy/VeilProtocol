@@ -7,12 +7,11 @@ pub mod state;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use primitive_types::U256;
-use serde::{Deserialize, Serialize};
-use serde_wasm_bindgen::{from_value, to_value};
+// use serde_wasm_bindgen::{from_value, to_value};
 use solana_program::{account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey};
 use spl_token::{solana_program::program_pack::Pack, state::Account as TokenAccount};
 use std::clone;
-use wasm_bindgen::prelude::*;
+// use wasm_bindgen::prelude::*;
 
 const TREE_DEPTH: usize = 32;
 
@@ -35,12 +34,12 @@ pub fn derive_pda(value: u64, program_id: &Pubkey) -> (Pubkey, u8) {
 }
 
 // PreCommitments contains info before being shielded inside protocol
-#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+//#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct PreCommitments {
-    nullifier_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
-    token_id: Vec<u8>,
-    value: u64, // amount
+    pub nullifier_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
+    pub token_id: Vec<u8>,
+    pub value: u64, // amount
 }
 
 impl clone::Clone for PreCommitments {
@@ -54,9 +53,9 @@ impl clone::Clone for PreCommitments {
 }
 
 // for js client support
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl PreCommitments {
-    #[wasm_bindgen(constructor)]
+    //#[wasm_bindgen(constructor)]
     pub fn new(value: u64, token_id: Vec<u8>, nullifier_pubkey: Vec<u8>) -> Self {
         PreCommitments {
             nullifier_pubkey,
@@ -65,24 +64,24 @@ impl PreCommitments {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
-        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+    //     borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    // }
 
-    #[wasm_bindgen]
-    pub fn deserialize(data: &[u8]) -> Result<PreCommitments, JsValue> {
-        borsh::from_slice(data)
-            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn deserialize(data: &[u8]) -> Result<PreCommitments, JsValue> {
+    //     borsh::from_slice(data)
+    //         .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    // }
 }
 
-#[wasm_bindgen]
+//#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct ShieldCipherText {
-    encrypted_text: Vec<u8>,
-    shield_key: Vec<u8>,
-    nonce: Vec<u8>,
+    pub encrypted_text: Vec<u8>,
+    pub shield_key: Vec<u8>,
+    pub nonce: Vec<u8>,
 }
 
 impl clone::Clone for ShieldCipherText {
@@ -96,9 +95,9 @@ impl clone::Clone for ShieldCipherText {
 }
 
 // for js client support
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl ShieldCipherText {
-    #[wasm_bindgen(constructor)]
+    //#[wasm_bindgen(constructor)]
     pub fn new(shield_key: Vec<u8>, encrypted_text: Vec<u8>, nonce: Vec<u8>) -> Self {
         ShieldCipherText {
             shield_key,
@@ -107,19 +106,19 @@ impl ShieldCipherText {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
-        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+    //     borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    // }
 
-    #[wasm_bindgen]
-    pub fn deserialize(data: &[u8]) -> Result<ShieldCipherText, JsValue> {
-        borsh::from_slice(data)
-            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn deserialize(data: &[u8]) -> Result<ShieldCipherText, JsValue> {
+    //     borsh::from_slice(data)
+    //         .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    // }
 }
 
-#[wasm_bindgen]
+//#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct DepositRequest {
     pre_commitments: PreCommitments,
@@ -127,9 +126,9 @@ pub struct DepositRequest {
 }
 
 // for js client support
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl DepositRequest {
-    #[wasm_bindgen(constructor)]
+    //#[wasm_bindgen(constructor)]
     pub fn new(pre_commitments: PreCommitments, shield_cipher_text: ShieldCipherText) -> Self {
         DepositRequest {
             pre_commitments,
@@ -137,32 +136,32 @@ impl DepositRequest {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
-        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+    //     borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    // }
 
-    #[wasm_bindgen]
-    pub fn deserialize(data: &[u8]) -> Result<DepositRequest, JsValue> {
-        borsh::from_slice(data)
-            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn deserialize(data: &[u8]) -> Result<DepositRequest, JsValue> {
+    //     borsh::from_slice(data)
+    //         .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    // }
 }
 
 // DepositEvent defines log after deposit instruction
-#[wasm_bindgen]
+//#[wasm_bindgen]
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct DepositEvent {
-    tree_number: u64,
-    start_position: u64,
-    pre_commitments: PreCommitments,
-    shield_cipher_text: ShieldCipherText,
+    pub tree_number: u64,
+    pub start_position: u64,
+    pub pre_commitments: PreCommitments,
+    pub shield_cipher_text: ShieldCipherText,
 }
 
 // for js client support
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl DepositEvent {
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn new(
         start_position: u64,
         tree_number: u64,
@@ -177,26 +176,26 @@ impl DepositEvent {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
-        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+    //     borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    // }
 
-    #[wasm_bindgen]
-    pub fn deserialize(data: &[u8]) -> Result<DepositEvent, JsValue> {
-        borsh::from_slice(data)
-            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn deserialize(data: &[u8]) -> Result<DepositEvent, JsValue> {
+    //     borsh::from_slice(data)
+    //         .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    // }
 }
 
-#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+//#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct CommitmentCipherText {
-    ciphertext: Vec<u8>,
-    encrypted_sender_key: Vec<u8>,
-    encrypted_receiver_key: Vec<u8>,
-    nonce: Vec<u8>,
-    memo: Vec<u8>,
+    pub ciphertext: Vec<u8>,
+    pub encrypted_sender_key: Vec<u8>,
+    pub encrypted_receiver_key: Vec<u8>,
+    pub nonce: Vec<u8>,
+    pub memo: Vec<u8>,
 }
 
 impl clone::Clone for CommitmentCipherText {
@@ -212,9 +211,9 @@ impl clone::Clone for CommitmentCipherText {
 }
 
 // for js client support
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl CommitmentCipherText {
-    #[wasm_bindgen(constructor)]
+    //#[wasm_bindgen(constructor)]
     pub fn new(
         encrypted_sender_key: Vec<u8>,
         ciphertext: Vec<u8>,
@@ -231,20 +230,20 @@ impl CommitmentCipherText {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
-        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+    //     borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    // }
 
-    #[wasm_bindgen]
-    pub fn deserialize(data: &[u8]) -> Result<CommitmentCipherText, JsValue> {
-        borsh::from_slice(data)
-            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn deserialize(data: &[u8]) -> Result<CommitmentCipherText, JsValue> {
+    //     borsh::from_slice(data)
+    //         .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    // }
 }
 
-#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+//#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct TransferRequest {
     proof: Vec<u8>,
     merkle_root: Vec<u8>,
@@ -254,9 +253,9 @@ pub struct TransferRequest {
     commitment_cipher_text: Vec<CommitmentCipherText>,
 }
 
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl TransferRequest {
-    #[wasm_bindgen(constructor)]
+    //#[wasm_bindgen(constructor)]
     pub fn new(
         proof: Vec<u8>,
         merkle_root: Vec<u8>,
@@ -273,67 +272,67 @@ impl TransferRequest {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<TransferRequest, JsValue> {
-        from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
+    //#[wasm_bindgen]
+    // pub fn from_js_value(js_value: JsValue) -> Result<TransferRequest, JsValue> {
+    //     from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
+    // }
 
-    #[wasm_bindgen]
-    pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
-        to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
+    //#[wasm_bindgen]
+    // pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
+    //     to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
+    // }
 
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn push_encrypted_commitments(&mut self, value: Vec<u8>) {
         self.encrypted_commitments.push(value);
     }
 
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn push_nullifiers(&mut self, value: Vec<u8>) {
         self.nullifiers.push(value);
     }
 }
 
-#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+//#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct RequestMetaData {
     tree_number: u64,
 }
 
 // for js client support
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl RequestMetaData {
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn new(tree_number: u64) -> Self {
         RequestMetaData { tree_number }
     }
 
-    #[wasm_bindgen]
-    pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
-        borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn serialize(&self) -> Result<Vec<u8>, JsValue> {
+    //     borsh::to_vec(self).map_err(|e| JsValue::from_str(&format!("Serialization failed: {}", e)))
+    // }
 
-    #[wasm_bindgen]
-    pub fn deserialize(data: &[u8]) -> Result<DepositEvent, JsValue> {
-        borsh::from_slice(data)
-            .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
-    }
+    //#[wasm_bindgen]
+    // pub fn deserialize(data: &[u8]) -> Result<DepositEvent, JsValue> {
+    //     borsh::from_slice(data)
+    //         .map_err(|e| JsValue::from_str(&format!("Deserialization failed: {}", e)))
+    // }
 }
 
 // TransferEvent defines log after transfer instruction
-#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+//#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct TransactionEvent {
-    tree_number: u64,
-    start_position: u64,
-    commitments: Vec<Vec<u8>>,
-    commitment_cipher_text: Vec<CommitmentCipherText>,
+    pub tree_number: u64,
+    pub start_position: u64,
+    pub commitments: Vec<Vec<u8>>,
+    pub commitment_cipher_text: Vec<CommitmentCipherText>,
 }
 
 // for js client support
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl TransactionEvent {
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn new(
         start_position: u64,
         tree_number: u64,
@@ -347,24 +346,24 @@ impl TransactionEvent {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<TransactionEvent, JsValue> {
-        from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
+    //#[wasm_bindgen]
+    // pub fn from_js_value(js_value: JsValue) -> Result<TransactionEvent, JsValue> {
+    //     from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
+    // }
 
-    #[wasm_bindgen]
-    pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
-        to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
+    //#[wasm_bindgen]
+    // pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
+    //     to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
+    // }
 
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn push_data(&mut self, value: Vec<u8>) {
         self.commitments.push(value);
     }
 }
 
-#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+//#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct WithdrawRequest {
     proof: Vec<u8>,
     merkle_root: Vec<u8>,
@@ -375,9 +374,9 @@ pub struct WithdrawRequest {
     commitment_cipher_texts: Vec<CommitmentCipherText>,
 }
 
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl WithdrawRequest {
-    #[wasm_bindgen(constructor)]
+    //#[wasm_bindgen(constructor)]
     pub fn new(
         proof: Vec<u8>,
         merkle_root: Vec<u8>,
@@ -397,22 +396,22 @@ impl WithdrawRequest {
         }
     }
 
-    #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<WithdrawRequest, JsValue> {
-        from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
+    //#[wasm_bindgen]
+    // pub fn from_js_value(js_value: JsValue) -> Result<WithdrawRequest, JsValue> {
+    //     from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
+    // }
 
-    #[wasm_bindgen]
-    pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
-        to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
+    //#[wasm_bindgen]
+    // pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
+    //     to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
+    // }
 
-    #[wasm_bindgen]
+    // #[wasm_bindgen]
     pub fn push_encrypted_commitment(&mut self, value: Vec<u8>) {
         self.encrypted_commitments.push(value);
     }
 
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn push_nullifiers(&mut self, value: Vec<u8>) {
         self.nullifiers.push(value);
     }
@@ -426,33 +425,33 @@ pub fn fetch_mint_address(token_account: &AccountInfo) -> Result<String, Program
 }
 
 // NullifierEvent defines log after adding new nullifers instruction
-#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug, Serialize, Deserialize)]
+//#[wasm_bindgen]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct NullifierEvent {
-    nullifiers: Vec<Vec<u8>>,
+    pub nullifiers: Vec<Vec<u8>>,
 }
 
 // for js client support
-#[wasm_bindgen]
+//#[wasm_bindgen]
 impl NullifierEvent {
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn new() -> Self {
         NullifierEvent {
             nullifiers: Vec::new(),
         }
     }
 
-    #[wasm_bindgen]
-    pub fn from_js_value(js_value: JsValue) -> Result<NullifierEvent, JsValue> {
-        from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
+    //#[wasm_bindgen]
+    // pub fn from_js_value(js_value: JsValue) -> Result<NullifierEvent, JsValue> {
+    //     from_value(js_value).map_err(|e| JsValue::from_str(&e.to_string()))
+    // }
 
-    #[wasm_bindgen]
-    pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
-        to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
-    }
+    //#[wasm_bindgen]
+    // pub fn to_js_value(&self) -> Result<JsValue, JsValue> {
+    //     to_value(self).map_err(|e| JsValue::from_str(&e.to_string()))
+    // }
 
-    #[wasm_bindgen]
+    //#[wasm_bindgen]
     pub fn push_nullifiers(&mut self, value: Vec<u8>) {
         self.nullifiers.push(value);
     }
