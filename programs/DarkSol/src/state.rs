@@ -31,7 +31,6 @@ pub fn initialize_commitments_manager(
     let payer_account = next_account_info(accounts_iter)?;
     let commitments_account = next_account_info(accounts_iter)?;
     let commitments_manager_account = next_account_info(accounts_iter)?;
-    let system_program = next_account_info(accounts_iter)?;
 
     if commitments_account.owner != program_id || commitments_manager_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
@@ -39,7 +38,7 @@ pub fn initialize_commitments_manager(
 
     // Derive PDA funding account to pay for the new account
     // TODO: change the seeds
-    let (funding_pda, funding_bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], program_id);
+    let (funding_pda, _funding_bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], program_id);
     if payer_account.key != &funding_pda {
         return Err(ProgramError::InvalidSeeds);
     }
@@ -62,55 +61,6 @@ pub fn initialize_commitments_manager(
     if commitments_account.key != &account_pda {
         return Err(ProgramError::InvalidSeeds);
     }
-
-    // Size of our commitments manager account
-    let manager_account_space: usize = 8; 
-
-    // Calculate minimum balance for rent exemption
-    let manager_account_rent = Rent::get()?;
-    let manager_account_required_lamports = manager_account_rent.minimum_balance(manager_account_space);
-
-    // Create the commitments manager account
-    invoke_signed(
-        &system_instruction::create_account(
-            payer_account.key,        // Account paying for the new account
-            &commitments_manager_pda,   // Account to be created
-            manager_account_required_lamports,                  // Amount of lamports to transfer to the new account
-            manager_account_space as u64,               // Size in bytes to allocate for the data field
-            program_id,                  // Set program owner to our program
-        ),
-        &[
-            payer_account.clone(),
-            commitments_manager_account.clone(),
-            system_program.clone(),
-        ],
-        &[&[b"funding_pda", &[funding_bump_seed]]], 
-    )?;
-
-     // Size of our commitments account
-    // set to maximum
-    let account_space = 10_485_760; 
-
-    // Calculate minimum balance for rent exemption
-    let rent = Rent::get()?;
-    let required_lamports = rent.minimum_balance(account_space);
-
-    // Create the commitments account
-    invoke_signed(
-        &system_instruction::create_account(
-            payer_account.key,        // Account paying for the new account
-            &account_pda,                     // Account to be created
-            required_lamports,                  // Amount of lamports to transfer to the new account
-            account_space as u64,               // Size in bytes to allocate for the data field
-            program_id,                  // Set program owner to our program
-        ),
-        &[
-            payer_account.clone(),
-            commitments_account.clone(),
-            system_program.clone(),
-        ],
-        &[&[b"funding_pda", &[funding_bump_seed]]], 
-    )?;
 
     // Update incremental to 2 as we also create a new empty tree
     let new_manager_data = CommitmentsManagerAccount{
