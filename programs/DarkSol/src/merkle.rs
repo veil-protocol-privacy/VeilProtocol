@@ -1,6 +1,5 @@
 use crate::{u256_to_bytes, PreCommitments, ZERO_VALUE};
 use borsh::{BorshDeserialize, BorshSerialize};
-use starknet_crypto::{poseidon_hash, poseidon_hash_many, Felt};
 use std::collections::HashMap;
 
 fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Vec<u8> {
@@ -11,11 +10,13 @@ fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Vec<u8> {
     right_bytes.copy_from_slice(&right);
 
     Vec::from(
-        poseidon_hash(
-            Felt::from_bytes_be(&left_bytes),
-            Felt::from_bytes_be(&right_bytes),
+        solana_poseidon::hashv(
+            solana_poseidon::Parameters::Bn254X5,
+            solana_poseidon::Endianness::BigEndian,
+            &[&left_bytes, &right_bytes],
         )
-        .to_bytes_be(),
+        .unwrap()
+        .to_bytes(),
     )
 }
 
@@ -33,7 +34,7 @@ pub fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
     let inputs = inputs
         .iter()
         .map(|input| {
-            let mut bytes = [0u8; 32];
+            let mut bytes = Vec::new();
             if input.len() < 32 {
                 // fill from the last index
                 let start = 32 - input.len();
@@ -41,10 +42,18 @@ pub fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
             } else {
                 bytes.copy_from_slice(input);
             };
-            Felt::from_bytes_be(&bytes)
+            bytes
         })
-        .collect::<Vec<Felt>>();
-    Vec::from(poseidon_hash_many(inputs.as_slice()).to_bytes_be())
+        .collect::<Vec<Vec<u8>>>();
+    Vec::from(
+        solana_poseidon::hashv(
+            solana_poseidon::Parameters::Bn254X5,
+            solana_poseidon::Endianness::BigEndian,
+            &inputs.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>(),
+        )
+        .unwrap()
+        .to_bytes(),
+    )
 }
 
 // Batch Incremental Merkle Tree for commitments
