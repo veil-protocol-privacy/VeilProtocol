@@ -34,7 +34,7 @@ pub fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
     let inputs = inputs
         .iter()
         .map(|input| {
-            let mut bytes = Vec::new();
+            let mut bytes = [0u8; 32];
             if input.len() < 32 {
                 // fill from the last index
                 let start = 32 - input.len();
@@ -44,7 +44,7 @@ pub fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
             };
             bytes
         })
-        .collect::<Vec<Vec<u8>>>();
+        .collect::<Vec<[u8; 32]>>();
     Vec::from(
         solana_poseidon::hashv(
             solana_poseidon::Parameters::Bn254X5,
