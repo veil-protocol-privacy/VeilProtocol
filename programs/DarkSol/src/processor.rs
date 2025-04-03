@@ -12,6 +12,7 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::log::sol_log_data;
+use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -622,6 +623,7 @@ pub fn process_initialize_account(
     program_id: &Pubkey,
     accounts: &[AccountInfo]
 ) -> ProgramResult {
+    msg!("Hello");
     initialize_commitments_manager(program_id, accounts)?;
 
     Ok(())

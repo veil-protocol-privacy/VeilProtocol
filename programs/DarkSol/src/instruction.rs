@@ -1,5 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::program_error::ProgramError;
+use solana_program::{msg, program_error::ProgramError};
 
 use crate::{DepositRequest, TransferRequest, WithdrawRequest};
 
@@ -14,6 +14,8 @@ pub enum DarkSolInstruction {
 
 impl DarkSolInstruction {
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
+
+        msg!("Received Instruction: {:?}", input);
         // Get the instruction variant from the first byte
         let (&variant, rest) = input
             .split_first()
