@@ -1,5 +1,5 @@
 use crate::merkle::CommitmentsAccount;
-use crate::{derive_pda, error::DarksolError, TREE_DEPTH};
+use crate::{derive_pda, TREE_DEPTH};
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::program::invoke;
 use solana_program::{
