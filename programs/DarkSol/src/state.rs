@@ -161,10 +161,10 @@ pub fn initialize_commitments_manager(
     );
 
     // store empty tree to the newly created commitments account
-    // let new_empty_tree: CommitmentsAccount<TREE_DEPTH> = CommitmentsAccount::new(1);
-    // let mut account_data: &mut [u8] = &mut commitments_account.data.borrow_mut()[..];
+    let new_empty_tree: CommitmentsAccount<TREE_DEPTH> = CommitmentsAccount::new(1);
+    let mut account_data: &mut [u8] = &mut commitments_account.data.borrow_mut()[..];
     // Serialize the struct into the account's data
-    // new_empty_tree.serialize(&mut account_data)?;
+    new_empty_tree.serialize(&mut account_data)?;
 
     msg!("commitments initialized");
 
