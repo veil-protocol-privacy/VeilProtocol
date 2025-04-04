@@ -149,7 +149,7 @@ pub fn process_deposit_fund(
     let funding_account = next_account_info(accounts_iter)?;
     let user_wallet = next_account_info(accounts_iter)?; // User's SOL wallet (payer)
     let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
-    let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
+    let associated_token_account = next_account_info(accounts_iter)?; // PDA token account
     let mint_account: &AccountInfo<'_> = next_account_info(accounts_iter)?; // SPL Token Mint
     let commitments_account = next_account_info(accounts_iter)?; // current commitments account
     let commitments_manager_account = next_account_info(accounts_iter)?;
@@ -184,7 +184,7 @@ pub fn process_deposit_fund(
             funding_account.clone(),
             user_wallet.clone(),
             user_token_account.clone(),
-            pda_token_account.clone(),
+            associated_token_account.clone(),
             mint_account.clone(),
             token_program.clone(),
             system_program.clone(),
