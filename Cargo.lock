@@ -847,8 +847,8 @@ dependencies = [
  "hex",
  "primitive-types",
  "sha3",
- "solana-poseidon",
  "solana-program",
+ "solana-sha256-hasher",
  "spl-associated-token-account",
  "spl-token 8.0.0",
 ]
@@ -1234,18 +1234,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67abfe149395e3aa1c48a2beb32b068e2334402df8181f818d3aee2b304c4f5d"
 dependencies = [
  "libsecp256k1-core",
-]
-
-[[package]]
-name = "light-poseidon"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c9a85a9752c549ceb7578064b4ed891179d20acd85f27318573b64d2d7ee7ee"
-dependencies = [
- "ark-bn254 0.4.0",
- "ark-ff 0.4.2",
- "num-bigint",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2196,18 +2184,6 @@ dependencies = [
  "solana-hash",
  "solana-pubkey",
  "solana-sha256-hasher",
-]
-
-[[package]]
-name = "solana-poseidon"
-version = "2.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd6f45ab021dd9958420e0ec59d9740bcea05a10a1fa55f84c483bf7a42dcf48"
-dependencies = [
- "ark-bn254 0.4.0",
- "light-poseidon",
- "solana-define-syscall",
- "thiserror 2.0.12",
 ]
 
 [[package]]

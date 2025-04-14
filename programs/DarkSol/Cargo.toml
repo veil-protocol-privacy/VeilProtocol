@@ -9,7 +9,7 @@ spl-associated-token-account = { git = "https://github.com/solana-program/associ
 ] }
 spl-token = { version = "8.0.0", features = ["no-entrypoint"] }
 solana-program = "2.2.1"
-solana-poseidon = "2.2.6"
+solana-sha256-hasher = "2.2.1"
 
 primitive-types = "0.12"
 
