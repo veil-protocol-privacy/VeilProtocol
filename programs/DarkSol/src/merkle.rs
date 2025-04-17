@@ -2,59 +2,51 @@ use crate::{u256_to_bytes, PreCommitments, ZERO_VALUE};
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::collections::HashMap;
 
-fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Vec<u8> {
-    let mut left_bytes = [0u8; 32];
-    left_bytes.copy_from_slice(&left);
+pub fn sha256(inputs: Vec<&[u8]>) -> Vec<u8> {
+    solana_sha256_hasher::hashv(&inputs).to_bytes().to_vec()
+}
 
-    let mut right_bytes = [0u8; 32];
-    right_bytes.copy_from_slice(&right);
-
-    Vec::from(
-        solana_poseidon::hashv(
-            solana_poseidon::Parameters::Bn254X5,
-            solana_poseidon::Endianness::BigEndian,
-            &[&left_bytes, &right_bytes],
-        )
-        .unwrap()
-        .to_bytes(),
-    )
+pub fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Vec<u8> {
+    solana_sha256_hasher::hashv(&[&left, &right])
+        .to_bytes()
+        .to_vec()
 }
 
 pub fn hash_precommits(pre_commitments: PreCommitments) -> Vec<u8> {
     let amount: Vec<u8> = pre_commitments.value.to_le_bytes().to_vec();
 
-    poseidon(vec![
+    sha256(vec![
         pre_commitments.nullifier_pubkey.as_slice(),
         pre_commitments.token_id.as_slice(),
         amount.as_slice(),
     ])
 }
 
-pub fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
-    let inputs = inputs
-        .iter()
-        .map(|input| {
-            let mut bytes = [0u8; 32];
-            if input.len() < 32 {
-                // fill from the last index
-                let start = 32 - input.len();
-                bytes[start..].copy_from_slice(&input[..]);
-            } else {
-                bytes.copy_from_slice(input);
-            };
-            bytes
-        })
-        .collect::<Vec<[u8; 32]>>();
-    Vec::from(
-        solana_poseidon::hashv(
-            solana_poseidon::Parameters::Bn254X5,
-            solana_poseidon::Endianness::BigEndian,
-            &inputs.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>(),
-        )
-        .unwrap()
-        .to_bytes(),
-    )
-}
+// pub fn poseidon(inputs: Vec<&[u8]>) -> Vec<u8> {
+//     let inputs = inputs
+//         .iter()
+//         .map(|input| {
+//             let mut bytes = [0u8; 32];
+//             if input.len() < 32 {
+//                 // fill from the last index
+//                 let start = 32 - input.len();
+//                 bytes[start..].copy_from_slice(&input[..]);
+//             } else {
+//                 bytes.copy_from_slice(input);
+//             };
+//             bytes
+//         })
+//         .collect::<Vec<[u8; 32]>>();
+//     Vec::from(
+//         solana_poseidon::hashv(
+//             solana_poseidon::Parameters::Bn254X5,
+//             solana_poseidon::Endianness::BigEndian,
+//             &inputs.iter().map(|v| v.as_slice()).collect::<Vec<&[u8]>>(),
+//         )
+//         .unwrap()
+//         .to_bytes(),
+//     )
+// }
 
 // Batch Incremental Merkle Tree for commitments
 // each account store a single tree indicate by its
@@ -271,7 +263,7 @@ mod tests {
             for step in 0..(16 / gap) {
                 let mut insert_list = vec![];
                 for i in (step * gap)..((step + 1) * gap) {
-                    let hash_i = poseidon(vec![&[i]]);
+                    let hash_i = sha256(vec![&[i]]);
                     insert_list.push(hash_i);
                 }
 
@@ -279,7 +271,7 @@ mod tests {
             }
 
             for i in ((16 / gap) * gap)..16 {
-                let hash_i = poseidon(vec![&[i]]);
+                let hash_i = sha256(vec![&[i]]);
                 let mut insert_list = vec![hash_i];
                 tree.insert_commitments(&mut insert_list).unwrap();
             }
@@ -301,7 +293,7 @@ mod tests {
         let mut tree = CommitmentsAccount::<TREE_DEPTH>::new(0);
         let mut insert_list = vec![];
         for i in 0..33 {
-            let hash_i = poseidon(vec![&[i]]);
+            let hash_i = sha256(vec![&[i]]);
             insert_list.push(hash_i);
         }
 
