@@ -456,3 +456,10 @@ impl NullifierEvent {
         self.nullifiers.push(value);
     }
 }
+
+/// The instruction data for the program.
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct SP1Groth16Proof {
+    pub proof: Vec<u8>,
+    pub sp1_public_inputs: Vec<u8>,
+}

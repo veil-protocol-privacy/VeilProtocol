@@ -30,7 +30,15 @@ pub enum DarksolError {
 
     // 6
     /// invalid merkel root
-    InvalidMerkelRoot
+    InvalidMerkelRoot,
+
+    // 7
+    /// nullifiers not match
+    NullifiersNotMatch,
+
+    // 8
+    /// merkle root not match
+    MerkleRootNotMatch,
 }
 
 impl From<DarksolError> for ProgramError {

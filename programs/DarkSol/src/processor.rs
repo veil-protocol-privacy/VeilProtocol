@@ -1,8 +1,7 @@
 use crate::merkle::CommitmentsAccount;
 use crate::state::initialize_commitments_manager;
 use crate::{
-    derive_pda, DepositEvent, DepositRequest, NullifierEvent, TransactionEvent, TransferRequest,
-    WithdrawRequest,
+    derive_pda, DepositEvent, DepositRequest, NullifierEvent, SP1Groth16Proof, TransactionEvent, TransferRequest, WithdrawRequest
 };
 use crate::{
     error::DarksolError,
@@ -10,7 +9,9 @@ use crate::{
     state::{initialize_commitments_account, CommitmentsManagerAccount},
     TREE_DEPTH,
 };
+use veil_types::PublicData;
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::instruction::Instruction;
 use solana_program::log::sol_log_data;
 use solana_program::msg;
 use solana_program::program::invoke;
@@ -275,6 +276,7 @@ pub fn process_transfer_asset(
     let spent_commitments_account = next_account_info(accounts_iter)?; // commitments account contains spent UTXO
     let current_commitments_account = next_account_info(accounts_iter)?; // current commitments account
     let commitments_manager_account = next_account_info(accounts_iter)?;
+    let verification_account = next_account_info(accounts_iter)?; // verification account
 
     // Ensure the user_wallet signed the transaction
     if !user_wallet.is_signer {
@@ -315,7 +317,27 @@ pub fn process_transfer_asset(
     let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::try_from_slice(&current_commitments_acc_data)?;
 
-    // TODO: verify proof
+    // Deserialize the SP1Groth16Proof from the instruction data.
+    let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+    let public_values = groth16_proof.sp1_public_inputs.as_slice();
+    let public_data = PublicData::try_from_slice(public_values)
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+    if public_data.merkle_root.eq(&request.merkle_root) {
+        return Err(DarksolError::MerkleRootNotMatch.into());
+    }
+    if public_data.nullifiers.eq(&request.nullifiers) {
+        return Err(DarksolError::NullifiersNotMatch.into());
+    }
+    
+    // Create an instruction to invoke the verification program.
+    let instruction = Instruction::new_with_borsh(
+        *verification_account.key,
+        &groth16_proof,
+        vec![],
+    );
+    invoke(&instruction, accounts)?;
 
     // check if merkle root is valid
     if !spent_tree.has_root(request.merkle_root) {
