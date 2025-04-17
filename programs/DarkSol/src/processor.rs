@@ -12,6 +12,7 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::log::sol_log_data;
+use solana_program::msg;
 use solana_program::program::invoke;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -19,16 +20,9 @@ use solana_program::{
     program::invoke_signed,
     program_error::ProgramError,
     pubkey::Pubkey,
-    rent::Rent,
-    system_instruction,
-    sysvar::Sysvar,
 };
-use spl_associated_token_account::get_associated_token_address;
-use spl_token::{
-    instruction::{initialize_account, transfer as spl_transfer},
-    solana_program::program_pack::Pack,
-    state::Account as TokenAccount,
-};
+use spl_associated_token_account::instruction::create_associated_token_account;
+use spl_token::instruction::transfer as spl_transfer;
 
 // transfer_token_in deposit user fund into contract owned account.
 // Create a new token account for the deposit account if it's not initialized yet
@@ -39,7 +33,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
     let funding_account = next_account_info(accounts_iter)?;
     let user_wallet = next_account_info(accounts_iter)?; // User's SOL wallet (payer)
     let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
-    let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
+    let associated_token_account = next_account_info(accounts_iter)?; // PDA token account
     let mint_account = next_account_info(accounts_iter)?; // SPL Token Mint
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
     let system_program = next_account_info(accounts_iter)?; // System Program for creating accounts
@@ -51,48 +45,23 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
         return Err(ProgramError::InvalidSeeds);
     }
 
-    let ata_pubkey = get_associated_token_address(&funding_pda, mint_account.key);
-    if pda_token_account.key != &ata_pubkey {
-        return Err(ProgramError::InvalidSeeds);
-    }
-
     // TODO: apply deposit fee
 
-    // Check if PDA's token account is already initialized
-    if pda_token_account.data_is_empty() {
-        // PDA's token account is not initialized → Create it
-
-        let rent: &Rent = &Rent::get()?;
-        let required_lamports = rent.minimum_balance(TokenAccount::LEN);
+    // Check if associated token account is already initialized
+    if associated_token_account.data_is_empty() {
+        // associated token account is not initialized → Create it
 
         invoke_signed(
-            &system_instruction::create_account(
+            &create_associated_token_account(
                 &funding_pda, // funding account pays for the new account
-                pda_token_account.key,
-                required_lamports,
-                TokenAccount::LEN as u64,
+                &funding_pda,
+                mint_account.key,
                 token_program.key,
             ),
             &[
-                user_wallet.clone(),
-                pda_token_account.clone(),
-                system_program.clone(),
-            ],
-            &[&[b"funding_pda", &[bump_seed]]], // PDA signs
-        )?;
-
-        invoke_signed(
-            // TODO: emit error
-            &initialize_account(
-                token_program.key,
-                pda_token_account.key,
-                mint_account.key,
-                &funding_account.key, // PDA is the owner of this token account
-            )?,
-            &[
-                pda_token_account.clone(),
-                mint_account.clone(),
                 funding_account.clone(),
+                associated_token_account.clone(),
+                system_program.clone(),
                 token_program.clone(),
             ],
             &[&[b"funding_pda", &[bump_seed]]], // PDA signs
@@ -105,14 +74,14 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
         &spl_transfer(
             token_program.key,
             user_token_account.key,
-            pda_token_account.key,
+            associated_token_account.key,
             user_wallet.key, // User must sign as authority
             &[],
             amount,
         )?,
         &[
             user_token_account.clone(),
-            pda_token_account.clone(),
+            associated_token_account.clone(),
             user_wallet.clone(),
             token_program.clone(),
         ],
@@ -121,7 +90,6 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
     Ok(())
 }
 
-// TODO: handle both native and spl token transfer
 fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> ProgramResult {
     let accounts_iter: &mut std::slice::Iter<'_, AccountInfo<'_>> = &mut accounts.iter();
 
@@ -181,7 +149,7 @@ pub fn process_deposit_fund(
     let funding_account = next_account_info(accounts_iter)?;
     let user_wallet = next_account_info(accounts_iter)?; // User's SOL wallet (payer)
     let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
-    let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
+    let associated_token_account = next_account_info(accounts_iter)?; // PDA token account
     let mint_account: &AccountInfo<'_> = next_account_info(accounts_iter)?; // SPL Token Mint
     let commitments_account = next_account_info(accounts_iter)?; // current commitments account
     let commitments_manager_account = next_account_info(accounts_iter)?;
@@ -216,7 +184,7 @@ pub fn process_deposit_fund(
             funding_account.clone(),
             user_wallet.clone(),
             user_token_account.clone(),
-            pda_token_account.clone(),
+            associated_token_account.clone(),
             mint_account.clone(),
             token_program.clone(),
             system_program.clone(),
@@ -618,10 +586,8 @@ pub fn process_withdraw_asset(
     Ok(())
 }
 
-pub fn process_initialize_account(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo]
-) -> ProgramResult {
+pub fn process_initialize_account(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    msg!("Hello");
     initialize_commitments_manager(program_id, accounts)?;
 
     Ok(())

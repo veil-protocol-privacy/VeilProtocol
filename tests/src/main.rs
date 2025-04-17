@@ -1,5 +1,5 @@
 
-use sp1_sdk::{include_elf, ProverClient, SP1Stdin};
+use sp1_sdk::{ProverClient, SP1Stdin};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
@@ -70,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
     let instruction = Instruction::new_with_borsh(
         program_id,
         &proof,
-        vec![AccountMeta::new(payer.pubkey(), false)],
+        vec![AccountMeta::new(payer.pubkey(), true)],
     );
 
     let mut transaction = Transaction::new_with_payer(&[instruction], Some(&payer.pubkey()));
