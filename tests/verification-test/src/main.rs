@@ -5,7 +5,8 @@ use solana_sdk::{
     commitment_config::CommitmentConfig, compute_budget::ComputeBudgetInstruction, instruction::{AccountMeta, Instruction}, native_token::LAMPORTS_PER_SOL, program_pack::Pack, pubkey, pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction::create_account, transaction::Transaction
 };
 
-use verification::{SP1Groth16Proof, process_instruction};
+use verification::{process_instruction};
+use veil_types::SP1Groth16Proof;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 

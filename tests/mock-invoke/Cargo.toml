@@ -10,7 +10,7 @@ crate-type = ["cdylib", "lib"]
 borsh = "1.5.1"
 solana-program = "2.2.0"
 groth16-solana = {git = "https://github.com/veil-protocol-privacy/groth16-solana"}
-veil-types = { git = "https://github.com/veil-protocol-privacy/veil-core/types"}
+veil-types = { git = "https://github.com/veil-protocol-privacy/veil-core", package = "types" }
 sha2 = "0.10.8"
 thiserror = "1.0.63"
 hex = "0.4.3"

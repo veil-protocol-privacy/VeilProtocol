@@ -9,6 +9,7 @@ solana-client = "2.2.7"
 solana-program-test = "2.2.7"
 solana-sdk = "2.2.2"
 verification = { path = "../../programs/verification" }
+veil-types = { git = "https://github.com/veil-protocol-privacy/veil-core", package = "types" }
 
 anyhow = "1.0.98"
 tokio = "1.44.2"
