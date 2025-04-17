@@ -49,13 +49,5 @@ pub fn process_instruction(
         vk,
     )
     .map_err(|_| ProgramError::InvalidInstructionData)?;
-
-    // Print out the public values.
-    let mut reader = groth16_proof.sp1_public_inputs.as_slice();
-    let a = u32::deserialize(&mut reader).unwrap();
-    let b = u32::deserialize(&mut reader).unwrap();
-    let c = u32::deserialize(&mut reader).unwrap();
-    msg!("Public values: (a: {}, b: {}, c: {})", a, b, c);
-
     Ok(())
 }
