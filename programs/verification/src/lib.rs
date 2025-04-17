@@ -49,5 +49,6 @@ pub fn process_instruction(
         vk,
     )
     .map_err(|_| ProgramError::InvalidInstructionData)?;
+    panic!("Verification successful.");
     Ok(())
 }

@@ -1,8 +1,7 @@
 use crate::merkle::CommitmentsAccount;
 use crate::state::initialize_commitments_manager;
 use crate::{
-    derive_pda, DepositEvent, DepositRequest, NullifierEvent, TransactionEvent, TransferRequest,
-    WithdrawRequest,
+    derive_pda, DepositEvent, DepositRequest, NullifierEvent, SP1Groth16Proof, TransactionEvent, TransferRequest, WithdrawRequest
 };
 use crate::{
     error::DarksolError,
@@ -11,6 +10,7 @@ use crate::{
     TREE_DEPTH,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::instruction::Instruction;
 use solana_program::log::sol_log_data;
 use solana_program::msg;
 use solana_program::program::invoke;
@@ -275,6 +275,7 @@ pub fn process_transfer_asset(
     let spent_commitments_account = next_account_info(accounts_iter)?; // commitments account contains spent UTXO
     let current_commitments_account = next_account_info(accounts_iter)?; // current commitments account
     let commitments_manager_account = next_account_info(accounts_iter)?;
+    let verification_account = next_account_info(accounts_iter)?; // verification account
 
     // Ensure the user_wallet signed the transaction
     if !user_wallet.is_signer {
@@ -315,7 +316,19 @@ pub fn process_transfer_asset(
     let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::try_from_slice(&current_commitments_acc_data)?;
 
-    // TODO: verify proof
+    // Deserialize the SP1Groth16Proof from the instruction data.
+    let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+    // Create an instruction to invoke the DarkSol program.
+    let instruction = Instruction::new_with_borsh(
+        *verification_account.key,
+        &groth16_proof,
+        vec![],
+    );
+
+    // Invoke the DarkSol program.
+    invoke(&instruction, accounts)?;
 
     // check if merkle root is valid
     if !spent_tree.has_root(request.merkle_root) {

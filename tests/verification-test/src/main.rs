@@ -18,7 +18,8 @@ async fn main() -> anyhow::Result<()> {
         String::from("http://127.0.0.1:8899"),
         CommitmentConfig::confirmed(),
     );
-    let program_id = pubkey!("14N3zoByaWcd9YcYUjNKawjLmGBfxDFBpL3iND2aWm2n");
+    let verification_program_id = pubkey!("14N3zoByaWcd9YcYUjNKawjLmGBfxDFBpL3iND2aWm2n");
+    let mock_invoke_program_id = pubkey!("6MQnjkzjD12Q3JfVD2rxvexZDX9bf7JiLfum17Gag3x9");
 
     // Setup the logger.
     sp1_sdk::utils::setup_logger();
@@ -27,26 +28,26 @@ async fn main() -> anyhow::Result<()> {
     let client = ProverClient::from_env();
 
     // Setup the inputs.
-    let mut stdin = SP1Stdin::new();
-    let a: u32 = 3;
-    let b: u32 = 4;
-    stdin.write(&a);
-    stdin.write(&b);
+    // let mut stdin = SP1Stdin::new();
+    // let a: u32 = 3;
+    // let b: u32 = 4;
+    // stdin.write(&a);
+    // stdin.write(&b);
 
     // Setup the program for proving.
-    let (pk, _) = client.setup(MULTIPLIER_ELF);
+    // let (pk, _) = client.setup(MULTIPLIER_ELF);
 
     // Generate the proof
-    let proof = client
-        .prove(&pk, &stdin)
-        .groth16()
-        .run()
-        .expect("failed to generate proof");
+    // let proof = client
+    //     .prove(&pk, &stdin)
+    //     .groth16()
+    //     .run()
+    //     .expect("failed to generate proof");
 
     // println!("Successfully generated proof!");
 
-    proof.save("bin/proof.bin").expect("saving proof failed");
-    // let proof = SP1ProofWithPublicValues::load("bin/proof.bin").expect("loading proof failed");
+    // proof.save("bin/proof.bin").expect("saving proof failed");
+    let proof = SP1ProofWithPublicValues::load("verification-test/bin/proof.bin").expect("loading proof failed");
 
     println!("Proof: {:?}", proof.bytes());
     println!("public values: {:?}", proof.public_values);
@@ -68,9 +69,9 @@ async fn main() -> anyhow::Result<()> {
 
 
     let instruction = Instruction::new_with_borsh(
-        program_id,
+        mock_invoke_program_id,
         &proof,
-        vec![AccountMeta::new(payer.pubkey(), true)],
+        vec![AccountMeta::new(verification_program_id, false)],
     );
 
     let cu_ix = ComputeBudgetInstruction::set_compute_unit_limit(500_000u32);
