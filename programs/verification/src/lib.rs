@@ -3,6 +3,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, msg, program_error::ProgramError,
     pubkey::Pubkey,
 };
+use veil_types::SP1Groth16Proof;
 
 pub mod verify_proof;
 use verify_proof::verify_proof;
@@ -21,13 +22,6 @@ solana_program::entrypoint!(process_instruction);
 /// ```
 const MULTIPLIER_VKEY_HASH: &str =
     "0x005a77634e3ec4947608d73a65ec44d13aea2147b409f14361f4de5ed1094f9b";
-
-/// The instruction data for the program.
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct SP1Groth16Proof {
-    pub proof: Vec<u8>,
-    pub sp1_public_inputs: Vec<u8>,
-}
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -49,6 +43,5 @@ pub fn process_instruction(
         vk,
     )
     .map_err(|_| ProgramError::InvalidInstructionData)?;
-    panic!("Verification successful.");
     Ok(())
 }

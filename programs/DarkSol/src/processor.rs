@@ -320,14 +320,12 @@ pub fn process_transfer_asset(
     let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
         .map_err(|_| ProgramError::InvalidInstructionData)?;
 
-    // Create an instruction to invoke the DarkSol program.
+    // Create an instruction to invoke the verification program.
     let instruction = Instruction::new_with_borsh(
         *verification_account.key,
         &groth16_proof,
         vec![],
     );
-
-    // Invoke the DarkSol program.
     invoke(&instruction, accounts)?;
 
     // check if merkle root is valid
