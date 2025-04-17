@@ -13,6 +13,8 @@ solana-sha256-hasher = "2.2.1"
 
 primitive-types = "0.12"
 
+veil-types = { git = "https://github.com/veil-protocol-privacy/veil-core", package = "types" }
+
 ark-std = "0.5"
 ark-bn254 = "0.5"
 ark-bls12-377 = "0.5"

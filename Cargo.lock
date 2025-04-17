@@ -2177,6 +2177,7 @@ dependencies = [
  "solana-sha256-hasher",
  "spl-associated-token-account",
  "spl-token 8.0.0",
+ "types",
 ]
 
 [[package]]

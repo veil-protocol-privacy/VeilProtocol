@@ -20,8 +20,8 @@ solana_program::entrypoint!(process_instruction);
 /// let (pk, vk) = client.setup(YOUR_ELF_HERE);
 /// let vkey_hash = vk.bytes32();
 /// ```
-const MULTIPLIER_VKEY_HASH: &str =
-    "0x005a77634e3ec4947608d73a65ec44d13aea2147b409f14361f4de5ed1094f9b";
+const METHOD_VKEY_HASH: &str =
+    "0x0023cd765324054f00567e986a5c43ca6beb470e7b4c46be87b0884b36d7ea37";
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -39,7 +39,7 @@ pub fn process_instruction(
     verify_proof(
         &groth16_proof.proof,
         &groth16_proof.sp1_public_inputs,
-        &MULTIPLIER_VKEY_HASH,
+        &METHOD_VKEY_HASH,
         vk,
     )
     .map_err(|_| ProgramError::InvalidInstructionData)?;
