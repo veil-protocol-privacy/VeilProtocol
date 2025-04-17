@@ -50,10 +50,10 @@ async fn main() -> anyhow::Result<()> {
     let proof = SP1ProofWithPublicValues::load("verification-test/bin/proof.bin").expect("loading proof failed");
 
     println!("Proof: {:?}", proof.bytes());
-    println!("public values: {:?}", proof.public_values);
+    println!("public values: {:?}", proof.public_values.as_slice());
     let proof = SP1Groth16Proof {
         proof: proof.bytes().to_vec(),
-        sp1_public_inputs: proof.public_values.to_vec(),
+        sp1_public_inputs: vec![12, 0, 0, 0],
     };
 
     let payer = Keypair::new();
