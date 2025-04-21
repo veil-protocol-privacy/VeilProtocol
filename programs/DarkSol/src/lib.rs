@@ -4,6 +4,7 @@ pub mod instruction;
 pub mod merkle;
 pub mod processor;
 pub mod state;
+pub mod utils;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use primitive_types::U256;

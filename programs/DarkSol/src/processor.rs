@@ -1,5 +1,11 @@
+use std::ops::{AddAssign, SubAssign};
+
 use crate::merkle::CommitmentsAccount;
 use crate::state::initialize_commitments_manager;
+use crate::utils::account::{
+    create_pda_account_from_pda_account, get_associated_token_address_and_bump_seed,
+};
+use crate::utils::serialize::BorshDeserializeWithLength;
 use crate::{
     derive_pda, DepositEvent, DepositRequest, NullifierEvent, SP1Groth16Proof, TransactionEvent, TransferRequest, WithdrawRequest
 };
@@ -22,8 +28,14 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };
+
+use solana_program::system_instruction;
+use solana_program::sysvar::{rent::Rent, Sysvar};
+
+use spl_associated_token_account::get_associated_token_address;
 use spl_associated_token_account::instruction::create_associated_token_account;
-use spl_token::instruction::transfer as spl_transfer;
+use spl_token::instruction::{initialize_account, transfer as spl_transfer};
+use spl_token::{solana_program::program_pack::Pack, state::Account};
 
 // transfer_token_in deposit user fund into contract owned account.
 // Create a new token account for the deposit account if it's not initialized yet
@@ -38,6 +50,8 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
     let mint_account = next_account_info(accounts_iter)?; // SPL Token Mint
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
     let system_program = next_account_info(accounts_iter)?; // System Program for creating accounts
+    let rent_sysvar = next_account_info(accounts_iter)?; // Rent Sysvar
+    let ata_program = next_account_info(accounts_iter)?; // Associated Token Program
 
     // Derive PDA funding account to pay for the new account
     // TODO: change the seeds
@@ -46,28 +60,96 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
         return Err(ProgramError::InvalidSeeds);
     }
 
+    let (funding_ata, ata_bump) = get_associated_token_address_and_bump_seed(
+        &*funding_account.key,
+        &mint_account.key,
+        ata_program.key,
+        token_program.key,
+    );
+
+    let (funding_ata, ata_bump) = Pubkey::find_program_address(&[b"funding_ata"], program_id);
+
+    msg!("funding_ata: {:?}", ata_bump);
+
+    let ata_seed: &[&[u8]] = &[
+        b"funding_ata",
+        // &funding_account.key.to_bytes(),
+        // &token_program.key.to_bytes(),
+        // &mint_account.key.to_bytes(),
+        &[ata_bump],
+    ];
+
+    if associated_token_account.key != &funding_ata {
+        return Err(ProgramError::InvalidSeeds);
+    }
+
     // TODO: apply deposit fee
 
-    // Check if associated token account is already initialized
+    // Check if PDA's token account is already initialized
     if associated_token_account.data_is_empty() {
-        // associated token account is not initialized → Create it
+        // PDA's token account is not initialized → Create it
+        // create_pda_account_from_pda_account(
+        //     funding_account,
+        //     spl_token::state::Account::LEN,
+        //     token_program.key,
+        //     system_program,
+        //     associated_token_account,
+        //     ata_seed,
+        // )?;
 
+        let rent: &Rent = &Rent::get()?;
+
+        let required_lamports = rent.minimum_balance(spl_token::state::Account::LEN);
+
+        msg!("Allocating PDA");
         invoke_signed(
-            &create_associated_token_account(
-                &funding_pda, // funding account pays for the new account
-                &funding_pda,
-                mint_account.key,
-                token_program.key,
+            &system_instruction::allocate(
+                associated_token_account.key,
+                spl_token::state::Account::LEN.try_into().unwrap(),
             ),
+            &[associated_token_account.clone(), system_program.clone()],
+            &[ata_seed],
+        )?;
+
+        msg!("Assigning PDA");
+        invoke_signed(
+            &system_instruction::assign(associated_token_account.key, token_program.key),
+            &[associated_token_account.clone(), system_program.clone()],
+            &[ata_seed],
+        )?;
+
+        msg!("Funding PDA");
+        if required_lamports > 0 {
+            funding_account
+                .lamports
+                .borrow_mut()
+                .sub_assign(required_lamports);
+            associated_token_account
+                .lamports
+                .borrow_mut()
+                .add_assign(required_lamports);
+        }
+
+        msg!("Initializing token account");
+        invoke_signed(
+            // TODO: emit error
+            &initialize_account(
+                token_program.key,
+                associated_token_account.key,
+                mint_account.key,
+                &funding_account.key, // PDA is the owner of this token account
+            )?,
             &[
-                funding_account.clone(),
                 associated_token_account.clone(),
-                system_program.clone(),
+                mint_account.clone(),
+                funding_account.clone(),
+                rent_sysvar.clone(),
                 token_program.clone(),
             ],
             &[&[b"funding_pda", &[bump_seed]]], // PDA signs
         )?;
     }
+    msg!("created funding ata");
 
     // transfer token to contract owned token account
     invoke(
@@ -87,6 +169,7 @@ fn transfer_token_in(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64)
             token_program.clone(),
         ],
     )?;
+    msg!("transfered to funding ata");
 
     Ok(())
 }
@@ -149,13 +232,17 @@ pub fn process_deposit_fund(
 
     let funding_account = next_account_info(accounts_iter)?;
     let user_wallet = next_account_info(accounts_iter)?; // User's SOL wallet (payer)
-    let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
-    let associated_token_account = next_account_info(accounts_iter)?; // PDA token account
+    let user_ata_account = next_account_info(accounts_iter)?; // User's SPL token account
+    let funding_ata_account = next_account_info(accounts_iter)?; // PDA token account
     let mint_account: &AccountInfo<'_> = next_account_info(accounts_iter)?; // SPL Token Mint
     let commitments_account = next_account_info(accounts_iter)?; // current commitments account
     let commitments_manager_account = next_account_info(accounts_iter)?;
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
     let system_program = next_account_info(accounts_iter)?; // System Program for creating accounts
+    let rent_sysvar = next_account_info(accounts_iter)?; // Rent Sysvar
+    let ata_program = next_account_info(accounts_iter)?; // Associated Token Program
+
+    msg!("transfer token in");
 
     if commitments_account.owner != program_id || commitments_manager_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
@@ -173,10 +260,14 @@ pub fn process_deposit_fund(
 
     // Derive the PDA for the current commitments account
     let (account_pda, _bump_seed) = derive_pda(manager_data.incremental_tree_number, program_id);
+
+    msg!("tree number: {:?}", manager_data.incremental_tree_number);
     // Ensure the provided new_account is the correct PDA
     if commitments_account.key != &account_pda {
         return Err(ProgramError::InvalidSeeds);
     }
+
+    msg!("transfer token in");
 
     // transfer token to contract owned account
     transfer_token_in(
@@ -184,28 +275,36 @@ pub fn process_deposit_fund(
         &[
             funding_account.clone(),
             user_wallet.clone(),
-            user_token_account.clone(),
-            associated_token_account.clone(),
+            user_ata_account.clone(),
+            funding_ata_account.clone(),
             mint_account.clone(),
             token_program.clone(),
             system_program.clone(),
+            rent_sysvar.clone(),
+            ata_program.clone(),
         ],
         request.pre_commitments.value,
     )?;
+
+    msg!("transfered token in");
 
     let inserted_leaf = hash_precommits(request.pre_commitments.clone());
 
     // fetch current tree number
     let mut commitments_data = &mut commitments_account.data.borrow_mut()[..];
+
     // deserialize the data
-    let mut current_tree = CommitmentsAccount::try_from_slice(&commitments_data)?;
+    let mut current_tree = CommitmentsAccount::try_from_slice_with_length(&commitments_data)?;
     let mut current_tree_number: u64 = manager_data.incremental_tree_number;
     let start_position: u64 = 0;
+
+    msg!("current tree number: {:?}", current_tree_number);
 
     // create new commitments account if insert leaf exceeds max tree depth
     // user should check if the inserted leafs exceeds max tree depth to
     // add new commitments account to the instruction
     if current_tree.exceed_tree_depth(1) {
+        msg!("exceed_tree_depth");
         let new_commitments_account = next_account_info(accounts_iter)?; // new commitments account
 
         // derive a new commitments account and update the commitments account
@@ -239,6 +338,7 @@ pub fn process_deposit_fund(
         }
     } else {
         // insert leaf into tree
+        msg!("not exceed_tree_depth");
         let result = current_tree.insert_commitments(&mut vec![inserted_leaf.clone()]);
         match result {
             Ok(resp) => {

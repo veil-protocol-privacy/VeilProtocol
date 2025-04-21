@@ -1,4 +1,5 @@
 use crate::merkle::CommitmentsAccount;
+use crate::utils::serialize::BorshSerializeWithLength;
 use crate::{derive_pda, TREE_DEPTH};
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::program::invoke;
@@ -150,7 +151,7 @@ pub fn initialize_commitments_manager(
 
     // Update incremental to 2 as we also create a new empty tree
     let new_manager_data = CommitmentsManagerAccount {
-        incremental_tree_number: 2,
+        incremental_tree_number: 1,
     };
     let mut manager_data: &mut [u8] = &mut commitments_manager_account.data.borrow_mut()[..];
     new_manager_data.serialize(&mut manager_data)?;
@@ -162,9 +163,9 @@ pub fn initialize_commitments_manager(
 
     // store empty tree to the newly created commitments account
     let new_empty_tree: CommitmentsAccount<TREE_DEPTH> = CommitmentsAccount::new(1);
-    let mut account_data: &mut [u8] = &mut commitments_account.data.borrow_mut()[..];
+
     // Serialize the struct into the account's data
-    new_empty_tree.serialize(&mut account_data)?;
+    new_empty_tree.serialize_with_length(&mut &mut commitments_account.data.borrow_mut()[..])?;
 
     msg!("commitments initialized");
 
@@ -248,9 +249,8 @@ pub fn initialize_commitments_account(
     // store empty tree to the newly created commitments account
     let new_empty_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::new(new_tree_number as u64);
-    let mut account_data: &mut [u8] = &mut commitments_account.data.borrow_mut()[..];
     // Serialize the struct into the account's data
-    new_empty_tree.serialize(&mut account_data)?;
+    new_empty_tree.serialize(&mut &mut commitments_account.data.borrow_mut()[..])?;
 
     msg!("commitments initialized");
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-spl-associated-token-account = { git = "https://github.com/solana-program/associated-token-account", rev = "1b1c0ebab3adaf57c0bca9c4a3522a76b9df632c", features = [
+spl-associated-token-account = { git = "https://github.com/solana-program/associated-token-account", rev = "5b18d35d817dc8fb9d91fed546ab2f9cbe369842", features = [
     "no-entrypoint",
 ] }
 spl-token = { version = "8.0.0", features = ["no-entrypoint"] }
@@ -28,5 +28,11 @@ borsh = "1.5.5"
 # wasm-bindgen = "0.2.100"
 # serde = "1.0.219"
 # serde-wasm-bindgen = "0.6.5"
+
+# [dev-dependencies]
+# tokio = { version = "1.44.2" }
+# solana-program-test = { version = "2.2.7" }
+# solana-sdk = { version = "2.2.2" }
+
 [lib]
 crate-type = ["cdylib", "lib"]
