@@ -6,6 +6,8 @@ pub mod processor;
 pub mod state;
 pub mod utils;
 
+use merkle::sha256;
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use primitive_types::U256;
 // use serde_wasm_bindgen::{from_value, to_value};
@@ -63,6 +65,14 @@ impl PreCommitments {
             value,
             token_id,
         }
+    }
+
+    pub fn hash(&self) -> Vec<u8> {
+        sha256(vec![
+            self.nullifier_pubkey.as_slice(),
+            self.token_id.as_slice(),
+            self.value.to_le_bytes().as_slice(),
+        ])
     }
 
     //#[wasm_bindgen]

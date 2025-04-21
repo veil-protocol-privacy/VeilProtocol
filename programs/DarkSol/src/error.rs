@@ -39,6 +39,10 @@ pub enum DarksolError {
     // 8
     /// merkle root not match
     MerkleRootNotMatch,
+
+    // 9
+    /// precommitments hash not match
+    PreCommitmentHashNotMatch,
 }
 
 impl From<DarksolError> for ProgramError {

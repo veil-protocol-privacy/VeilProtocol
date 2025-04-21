@@ -571,7 +571,28 @@ pub fn process_withdraw_asset(
     let mut spent_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::try_from_slice(&commitments_acc_data)?;
 
-    // TODO: verify proof
+    // Deserialize the SP1Groth16Proof from the instruction data.
+    let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+
+    let public_values = groth16_proof.sp1_public_inputs.as_slice();
+    let public_data = PublicData::try_from_slice(public_values)
+        .map_err(|_| ProgramError::InvalidInstructionData)?;
+    if public_data.merkle_root.eq(&request.merkle_root) {
+        return Err(DarksolError::MerkleRootNotMatch.into());
+    }
+    if public_data.nullifiers.eq(&request.nullifiers) {
+        return Err(DarksolError::NullifiersNotMatch.into());
+    }
+    
+    
+    let precommitments_hash = request.pre_commitments.hash();
+    if public_data.output_hashes.last().is_some() {
+        let last_hash = public_data.output_hashes.last().unwrap();
+        if !last_hash.eq(&precommitments_hash) {
+        return Err(DarksolError::PreCommitmentHashNotMatch.into());
+       }
+    }
 
     // check if merkle root is valid
     if !spent_tree.has_root(request.merkle_root) {
