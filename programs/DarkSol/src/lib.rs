@@ -16,7 +16,7 @@ use spl_token::{solana_program::program_pack::Pack, state::Account as TokenAccou
 use std::clone;
 // use wasm_bindgen::prelude::*;
 
-const TREE_DEPTH: usize = 32;
+const TREE_DEPTH: usize = 31;
 
 pub const ZERO_VALUE: U256 = U256([
     0x30644E72E131A029,

@@ -1,5 +1,7 @@
 use crate::merkle::CommitmentsAccount;
-use crate::utils::serialize::BorshSerializeWithLength;
+use crate::utils::serialize::{
+    BorshDeserializeWithLength, BorshSerializeWithLength, DATA_LENGTH_CAPACITY,
+};
 use crate::{derive_pda, TREE_DEPTH};
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::program::invoke;
@@ -15,7 +17,7 @@ use solana_program::{
 
 // CommitmentsManagerAccount is a single account
 // tracks all the commitments accounts by their tree number
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct CommitmentsManagerAccount {
     pub incremental_tree_number: u64,
 }
@@ -73,7 +75,7 @@ pub fn initialize_commitments_manager(
     msg!("2");
 
     // Size of our commitments manager account
-    let manager_account_space: usize = 8;
+    let manager_account_space: usize = 8 + DATA_LENGTH_CAPACITY;
 
     // Calculate minimum balance for rent exemption
     let manager_account_rent = Rent::get()?;
@@ -153,9 +155,7 @@ pub fn initialize_commitments_manager(
     let new_manager_data = CommitmentsManagerAccount {
         incremental_tree_number: 1,
     };
-    let mut manager_data: &mut [u8] = &mut commitments_manager_account.data.borrow_mut()[..];
-    new_manager_data.serialize(&mut manager_data)?;
-
+    new_manager_data.serialize_with_length(&mut &mut commitments_manager_account.data.borrow_mut()[..])?;
     msg!(
         "creating new commitments manager account with increment: {}",
         2
@@ -205,7 +205,7 @@ pub fn initialize_commitments_account(
     let mut data = commitments_mananger_account.data.borrow_mut();
     // deserialize the data
     let mut manager_data: CommitmentsManagerAccount =
-        CommitmentsManagerAccount::try_from_slice(&data)?;
+        CommitmentsManagerAccount::try_from_slice_with_length(&data)?;
     let new_tree_number = manager_data.incremental_tree_number + 1;
 
     // Derive the PDA for the newly account
@@ -242,7 +242,7 @@ pub fn initialize_commitments_account(
 
     manager_data.incremental_tree_number = new_tree_number;
     // Serialize the CounterAccount struct into the account's data
-    manager_data.serialize(&mut &mut data[..])?;
+    manager_data.serialize_with_length(&mut &mut data[..])?;
 
     msg!("adding new commitment account to manager");
 
@@ -250,7 +250,7 @@ pub fn initialize_commitments_account(
     let new_empty_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::new(new_tree_number as u64);
     // Serialize the struct into the account's data
-    new_empty_tree.serialize(&mut &mut commitments_account.data.borrow_mut()[..])?;
+    new_empty_tree.serialize_with_length(&mut &mut commitments_account.data.borrow_mut()[..])?;
 
     msg!("commitments initialized");
 

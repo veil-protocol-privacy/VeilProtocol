@@ -5,9 +5,10 @@ use crate::state::initialize_commitments_manager;
 use crate::utils::account::{
     create_pda_account_from_pda_account, get_associated_token_address_and_bump_seed,
 };
-use crate::utils::serialize::BorshDeserializeWithLength;
+use crate::utils::serialize::{BorshDeserializeWithLength, BorshSerializeWithLength};
 use crate::{
-    derive_pda, DepositEvent, DepositRequest, NullifierEvent, SP1Groth16Proof, TransactionEvent, TransferRequest, WithdrawRequest
+    derive_pda, DepositEvent, DepositRequest, NullifierEvent, SP1Groth16Proof, TransactionEvent,
+    TransferRequest, WithdrawRequest,
 };
 use crate::{
     error::DarksolError,
@@ -15,7 +16,6 @@ use crate::{
     state::{initialize_commitments_account, CommitmentsManagerAccount},
     TREE_DEPTH,
 };
-use veil_types::PublicData;
 use borsh::{BorshDeserialize, BorshSerialize};
 use solana_program::instruction::Instruction;
 use solana_program::log::sol_log_data;
@@ -28,6 +28,7 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };
+use veil_types::PublicData;
 
 use solana_program::system_instruction;
 use solana_program::sysvar::{rent::Rent, Sysvar};
@@ -242,8 +243,6 @@ pub fn process_deposit_fund(
     let rent_sysvar = next_account_info(accounts_iter)?; // Rent Sysvar
     let ata_program = next_account_info(accounts_iter)?; // Associated Token Program
 
-    msg!("transfer token in");
-
     if commitments_account.owner != program_id || commitments_manager_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
     }
@@ -255,8 +254,15 @@ pub fn process_deposit_fund(
 
     // fetch the current tree number
     let data = commitments_manager_account.data.borrow_mut();
+
+    msg!("data length: {:?}", data.len());
+    msg!("data: {:?}", data);
+
     // deserialize the data
-    let manager_data: CommitmentsManagerAccount = CommitmentsManagerAccount::try_from_slice(&data)?;
+    let manager_data: CommitmentsManagerAccount =
+        CommitmentsManagerAccount::try_from_slice_with_length(&data)?;
+
+    msg!("manager_data: {:?}", manager_data);
 
     // Derive the PDA for the current commitments account
     let (account_pda, _bump_seed) = derive_pda(manager_data.incremental_tree_number, program_id);
@@ -332,18 +338,24 @@ pub fn process_deposit_fund(
         match result {
             Ok(resp) => {
                 // update tree
-                resp.commitments_data.serialize(&mut new_commitments_data)?
+                resp.commitments_data
+                    .serialize_with_length(&mut new_commitments_data)?
             }
             Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
         }
     } else {
         // insert leaf into tree
         msg!("not exceed_tree_depth");
+
+        msg!("commitments_data length: {:?}", commitments_data.len());
         let result = current_tree.insert_commitments(&mut vec![inserted_leaf.clone()]);
         match result {
             Ok(resp) => {
                 // update tree
-                resp.commitments_data.serialize(&mut commitments_data)?
+                resp.commitments_data
+                    .serialize_with_length(&mut commitments_data)?;
+
+                msg!("commitments_data length: {:?}", commitments_data.len());
             }
             Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
         }
@@ -376,7 +388,7 @@ pub fn process_transfer_asset(
     let spent_commitments_account = next_account_info(accounts_iter)?; // commitments account contains spent UTXO
     let current_commitments_account = next_account_info(accounts_iter)?; // current commitments account
     let commitments_manager_account = next_account_info(accounts_iter)?;
-    let verification_account = next_account_info(accounts_iter)?; // verification account
+    // let verification_account = next_account_info(accounts_iter)?; // verification account
 
     // Ensure the user_wallet signed the transaction
     if !user_wallet.is_signer {
@@ -399,7 +411,8 @@ pub fn process_transfer_asset(
     // fetch the current tree number
     let data = commitments_manager_account.data.borrow_mut();
     // deserialize the data
-    let manager_data: CommitmentsManagerAccount = CommitmentsManagerAccount::try_from_slice(&data)?;
+    let manager_data: CommitmentsManagerAccount =
+        CommitmentsManagerAccount::try_from_slice_with_length(&data)?;
     let mut current_tree_number = manager_data.incremental_tree_number;
 
     // Derive the PDA for the commitments account
@@ -411,11 +424,16 @@ pub fn process_transfer_asset(
 
     let mut spent_commitments_acc_data = &mut spent_commitments_account.data.borrow_mut()[..];
     let mut spent_tree: CommitmentsAccount<TREE_DEPTH> =
-        CommitmentsAccount::try_from_slice(&spent_commitments_acc_data)?;
+        CommitmentsAccount::try_from_slice_with_length(&spent_commitments_acc_data)?;
 
-    let mut current_commitments_acc_data = &mut current_commitments_account.data.borrow_mut()[..];
+    let mut current_commitments_acc_data =
+        if current_commitments_account.key == spent_commitments_account.key {
+            &mut spent_commitments_acc_data
+        } else {
+            &mut current_commitments_account.data.borrow_mut()[..]
+        };
     let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
-        CommitmentsAccount::try_from_slice(&current_commitments_acc_data)?;
+        CommitmentsAccount::try_from_slice_with_length(&current_commitments_acc_data)?;
 
     // Deserialize the SP1Groth16Proof from the instruction data.
     let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
@@ -424,22 +442,24 @@ pub fn process_transfer_asset(
     let public_values = groth16_proof.sp1_public_inputs.as_slice();
     let public_data = PublicData::try_from_slice(public_values)
         .map_err(|_| ProgramError::InvalidInstructionData)?;
-    if public_data.merkle_root.eq(&request.merkle_root) {
+    if public_data.merkle_root.ne(&request.merkle_root) {
         return Err(DarksolError::MerkleRootNotMatch.into());
     }
-    if public_data.nullifiers.eq(&request.nullifiers) {
+    if public_data.nullifiers.ne(&request.nullifiers) {
         return Err(DarksolError::NullifiersNotMatch.into());
     }
-    
+
     // Create an instruction to invoke the verification program.
-    let instruction = Instruction::new_with_borsh(
-        *verification_account.key,
-        &groth16_proof,
-        vec![],
-    );
-    invoke(&instruction, accounts)?;
+    // let instruction = Instruction::new_with_borsh(
+    //     *verification_account.key,
+    //     &groth16_proof,
+    //     vec![],
+    // );
+    // invoke(&instruction, accounts)?;
 
     // check if merkle root is valid
+    msg!("request merkle root: {:?}", request.merkle_root);
+
     if !spent_tree.has_root(request.merkle_root) {
         return Err(DarksolError::InvalidMerkelRoot.into());
     }
