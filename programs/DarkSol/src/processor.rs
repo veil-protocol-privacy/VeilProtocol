@@ -511,7 +511,7 @@ pub fn process_transfer_asset(
         match result {
             Ok(resp) => {
                 // update tree
-                resp.commitments_data.serialize(&mut new_commitments_data)?;
+                resp.commitments_data.serialize_with_length(&mut new_commitments_data)?;
 
                 start_position = resp.commitments_data.next_leaf_index as u64;
             }
@@ -524,7 +524,7 @@ pub fn process_transfer_asset(
             Ok(resp) => {
                 // update tree
                 resp.commitments_data
-                    .serialize(&mut current_commitments_acc_data)?;
+                    .serialize_with_length(&mut current_commitments_acc_data)?;
 
                 start_position = resp.commitments_data.next_leaf_index as u64;
             }
@@ -533,7 +533,7 @@ pub fn process_transfer_asset(
     }
 
     // update nullifiers list
-    spent_tree.serialize(&mut spent_commitments_acc_data)?;
+    spent_tree.serialize_with_length(&mut spent_commitments_acc_data)?;
 
     // emit event
     let event = TransactionEvent {
@@ -589,7 +589,7 @@ pub fn process_withdraw_asset(
 
     let mut commitments_acc_data = &mut spent_commitments_account.data.borrow_mut()[..];
     let mut spent_tree: CommitmentsAccount<TREE_DEPTH> =
-        CommitmentsAccount::try_from_slice(&commitments_acc_data)?;
+        CommitmentsAccount::try_from_slice_with_length(&commitments_acc_data)?;
 
     // Deserialize the SP1Groth16Proof from the instruction data.
     let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
@@ -641,12 +641,12 @@ pub fn process_withdraw_asset(
         let data = commitments_manager_account.data.borrow_mut();
         // deserialize the data
         let manager_data: CommitmentsManagerAccount =
-            CommitmentsManagerAccount::try_from_slice(&data)?;
+            CommitmentsManagerAccount::try_from_slice_with_length(&data)?;
         let current_tree_number = manager_data.incremental_tree_number;
 
         let mut commitments_acc_data = &mut current_commitment_account.data.borrow_mut()[..];
         let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
-            CommitmentsAccount::try_from_slice(&commitments_acc_data)?;
+            CommitmentsAccount::try_from_slice_with_length(&commitments_acc_data)?;
 
         // Derive the PDA for the commitments account
         let (account_pda, _bump_seed) = derive_pda(current_tree_number, program_id);
@@ -689,7 +689,7 @@ pub fn process_withdraw_asset(
             match result {
                 Ok(resp) => {
                     // update tree
-                    resp.commitments_data.serialize(&mut new_commitments_data)?;
+                    resp.commitments_data.serialize_with_length(&mut new_commitments_data)?;
 
                     tree_number = current_tree_number + 1;
                     start_position = resp.commitments_data.next_leaf_index as u64;
@@ -703,7 +703,7 @@ pub fn process_withdraw_asset(
             match result {
                 Ok(resp) => {
                     // update tree
-                    resp.commitments_data.serialize(&mut commitments_acc_data)?;
+                    resp.commitments_data.serialize_with_length(&mut commitments_acc_data)?;
 
                     tree_number = current_tree_number;
                     start_position = resp.commitments_data.next_leaf_index as u64;
@@ -714,7 +714,7 @@ pub fn process_withdraw_asset(
     }
 
     // update nullifiers list
-    spent_tree.serialize(&mut commitments_acc_data)?;
+    spent_tree.serialize_with_length(&mut commitments_acc_data)?;
 
     // transfer token to reciever token account
     transfer_token_out(
