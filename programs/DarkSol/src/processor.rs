@@ -587,9 +587,9 @@ pub fn process_withdraw_asset(
         return Err(ProgramError::MissingRequiredSignature);
     }
 
-    let mut commitments_acc_data = &mut spent_commitments_account.data.borrow_mut()[..];
+    let mut spent_commitments_acc_data = &mut spent_commitments_account.data.borrow_mut()[..];
     let mut spent_tree: CommitmentsAccount<TREE_DEPTH> =
-        CommitmentsAccount::try_from_slice_with_length(&commitments_acc_data)?;
+        CommitmentsAccount::try_from_slice_with_length(&spent_commitments_acc_data)?;
 
     // Deserialize the SP1Groth16Proof from the instruction data.
     let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
@@ -644,7 +644,13 @@ pub fn process_withdraw_asset(
             CommitmentsManagerAccount::try_from_slice_with_length(&data)?;
         let current_tree_number = manager_data.incremental_tree_number;
 
-        let mut commitments_acc_data = &mut current_commitment_account.data.borrow_mut()[..];
+        let mut commitments_acc_data =
+        if current_commitment_account.key == spent_commitments_account.key {
+            &mut spent_commitments_acc_data
+        } else {
+            &mut current_commitment_account.data.borrow_mut()[..]
+        };
+
         let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
             CommitmentsAccount::try_from_slice_with_length(&commitments_acc_data)?;
 
@@ -714,7 +720,7 @@ pub fn process_withdraw_asset(
     }
 
     // update nullifiers list
-    spent_tree.serialize_with_length(&mut commitments_acc_data)?;
+    spent_tree.serialize_with_length(&mut spent_commitments_acc_data)?;
 
     // transfer token to reciever token account
     transfer_token_out(
