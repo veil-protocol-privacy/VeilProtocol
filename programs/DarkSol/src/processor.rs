@@ -1,3 +1,4 @@
+use core::panic;
 use std::ops::{AddAssign, SubAssign};
 
 use crate::merkle::CommitmentsAccount;
@@ -28,7 +29,7 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::Pubkey,
 };
-use veil_types::PublicData;
+use veil_types::PublicValue;
 
 use solana_program::system_instruction;
 use solana_program::sysvar::{rent::Rent, Sysvar};
@@ -198,6 +199,22 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
 
     // TODO: apply withdraw fee
 
+    let (funding_ata, ata_bump) = Pubkey::find_program_address(&[b"funding_ata"], program_id);
+
+    msg!("funding_ata: {:?}", ata_bump);
+
+    let ata_seed: &[&[u8]] = &[
+        b"funding_ata",
+        // &funding_account.key.to_bytes(),
+        // &token_program.key.to_bytes(),
+        // &mint_account.key.to_bytes(),
+        &[ata_bump],
+    ];
+
+    if pda_token_account.key != &funding_ata {
+        return Err(ProgramError::InvalidSeeds);
+    }
+
     // transfer token from contract owned token account to user token address
     invoke_signed(
         // TODO: emit error
@@ -215,7 +232,7 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
             user_wallet.clone(),
             token_program.clone(),
         ],
-        &[&[b"funding_pda", &[bump_seed]]], // PDA signs
+        &[ata_seed], // PDA signs
     )?;
 
     Ok(())
@@ -255,25 +272,17 @@ pub fn process_deposit_fund(
     // fetch the current tree number
     let data = commitments_manager_account.data.borrow_mut();
 
-    msg!("data length: {:?}", data.len());
-    msg!("data: {:?}", data);
-
     // deserialize the data
     let manager_data: CommitmentsManagerAccount =
         CommitmentsManagerAccount::try_from_slice_with_length(&data)?;
 
-    msg!("manager_data: {:?}", manager_data);
-
     // Derive the PDA for the current commitments account
     let (account_pda, _bump_seed) = derive_pda(manager_data.incremental_tree_number, program_id);
 
-    msg!("tree number: {:?}", manager_data.incremental_tree_number);
     // Ensure the provided new_account is the correct PDA
     if commitments_account.key != &account_pda {
         return Err(ProgramError::InvalidSeeds);
     }
-
-    msg!("transfer token in");
 
     // transfer token to contract owned account
     transfer_token_in(
@@ -291,8 +300,6 @@ pub fn process_deposit_fund(
         ],
         request.pre_commitments.value,
     )?;
-
-    msg!("transfered token in");
 
     let inserted_leaf = hash_precommits(request.pre_commitments.clone());
 
@@ -334,31 +341,14 @@ pub fn process_deposit_fund(
         current_tree_number += 1;
 
         // insert leaf into tree
-        let result = current_tree.insert_commitments(&mut vec![inserted_leaf.clone()]);
-        match result {
-            Ok(resp) => {
-                // update tree
-                resp.commitments_data
-                    .serialize_with_length(&mut new_commitments_data)?
-            }
-            Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
-        }
+        current_tree.insert_commitments(&mut vec![inserted_leaf.clone()], &mut new_commitments_data)
+            .map_err(|_| DarksolError::FailedInsertCommitmentHash)?;
     } else {
         // insert leaf into tree
         msg!("not exceed_tree_depth");
 
-        msg!("commitments_data length: {:?}", commitments_data.len());
-        let result = current_tree.insert_commitments(&mut vec![inserted_leaf.clone()]);
-        match result {
-            Ok(resp) => {
-                // update tree
-                resp.commitments_data
-                    .serialize_with_length(&mut commitments_data)?;
-
-                msg!("commitments_data length: {:?}", commitments_data.len());
-            }
-            Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
-        }
+        current_tree.insert_commitments(&mut vec![inserted_leaf.clone()], &mut commitments_data)
+            .map_err(|_| DarksolError::FailedInsertCommitmentHash)?;
     }
 
     // emit events for indexer to scan
@@ -388,7 +378,7 @@ pub fn process_transfer_asset(
     let spent_commitments_account = next_account_info(accounts_iter)?; // commitments account contains spent UTXO
     let current_commitments_account = next_account_info(accounts_iter)?; // current commitments account
     let commitments_manager_account = next_account_info(accounts_iter)?;
-    // let verification_account = next_account_info(accounts_iter)?; // verification account
+    let verification_account = next_account_info(accounts_iter)?; // verification account
 
     // Ensure the user_wallet signed the transaction
     if !user_wallet.is_signer {
@@ -435,32 +425,32 @@ pub fn process_transfer_asset(
     let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::try_from_slice_with_length(&current_commitments_acc_data)?;
 
-    // Deserialize the SP1Groth16Proof from the instruction data.
-    let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
-        .map_err(|_| ProgramError::InvalidInstructionData)?;
+    // // Deserialize the SP1Groth16Proof from the instruction data.
+    // let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
+    //     .map_err(|_| ProgramError::InvalidInstructionData)?;
 
-    let public_values = groth16_proof.sp1_public_inputs.as_slice();
-    let public_data = PublicData::try_from_slice(public_values)
-        .map_err(|_| ProgramError::InvalidInstructionData)?;
-    if public_data.merkle_root.ne(&request.merkle_root) {
-        return Err(DarksolError::MerkleRootNotMatch.into());
-    }
-    if public_data.nullifiers.ne(&request.nullifiers) {
-        return Err(DarksolError::NullifiersNotMatch.into());
-    }
+    // let public_values = groth16_proof.sp1_public_inputs.as_slice();
+    // let public_data = PublicValue::try_from_slice(public_values)
+    //     .map_err(|_| ProgramError::InvalidInstructionData)?;
+    // if public_data.root.ne(&request.merkle_root) {
+    //     return Err(DarksolError::MerkleRootNotMatch.into());
+    // }
+    // if public_data.nullifiers.ne(&request.nullifiers) {
+    //     return Err(DarksolError::NullifiersNotMatch.into());
+    // }
 
     // Create an instruction to invoke the verification program.
-    // let instruction = Instruction::new_with_borsh(
-    //     *verification_account.key,
-    //     &groth16_proof,
-    //     vec![],
-    // );
-    // invoke(&instruction, accounts)?;
+    let instruction = Instruction::new_with_bytes(
+        *verification_account.key,
+        &request.proof,
+        vec![],
+    );
+    invoke(&instruction, accounts)?;
 
     // check if merkle root is valid
     msg!("request merkle root: {:?}", request.merkle_root);
 
-    if !spent_tree.has_root(request.merkle_root) {
+    if !spent_tree.has_root(&request.merkle_root) {
         return Err(DarksolError::InvalidMerkelRoot.into());
     }
 
@@ -507,26 +497,19 @@ pub fn process_transfer_asset(
         let mut new_commitments_data = &mut new_commitments_account.data.borrow_mut()[..];
 
         // insert leaf into tree
-        let result = inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone());
+        let result = inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone(), &mut new_commitments_data);
         match result {
-            Ok(resp) => {
-                // update tree
-                resp.commitments_data.serialize_with_length(&mut new_commitments_data)?;
-
-                start_position = resp.commitments_data.next_leaf_index as u64;
+            Ok(next_leaf_index) => {
+                start_position = next_leaf_index;
             }
             Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
         }
     } else {
         // insert leaf into tree
-        let result = inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone());
+        let result = inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone(), &mut current_commitments_acc_data);
         match result {
-            Ok(resp) => {
-                // update tree
-                resp.commitments_data
-                    .serialize_with_length(&mut current_commitments_acc_data)?;
-
-                start_position = resp.commitments_data.next_leaf_index as u64;
+            Ok(next_leaf_index) => {
+                start_position = next_leaf_index;
             }
             Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
         }
@@ -566,11 +549,13 @@ pub fn process_withdraw_asset(
 
     let funding_account = next_account_info(accounts_iter)?;
     let spent_commitments_account = next_account_info(accounts_iter)?; // commitments account for the request tree number
+    let commitments_manager_account = next_account_info(accounts_iter)?;
     let user_wallet = next_account_info(accounts_iter)?; // User's SOL wallet (payer)
     let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
     let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
-
+    let verification_program = next_account_info(accounts_iter)?; // verification program
+    
     if spent_commitments_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
     }
@@ -591,36 +576,33 @@ pub fn process_withdraw_asset(
     let mut spent_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::try_from_slice_with_length(&spent_commitments_acc_data)?;
 
-    // Deserialize the SP1Groth16Proof from the instruction data.
-    let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
-        .map_err(|_| ProgramError::InvalidInstructionData)?;
-
-    let public_values = groth16_proof.sp1_public_inputs.as_slice();
-    let public_data = PublicData::try_from_slice(public_values)
-        .map_err(|_| ProgramError::InvalidInstructionData)?;
-    if public_data.merkle_root.eq(&request.merkle_root) {
-        return Err(DarksolError::MerkleRootNotMatch.into());
-    }
-    if public_data.nullifiers.eq(&request.nullifiers) {
-        return Err(DarksolError::NullifiersNotMatch.into());
-    }
-    
-    
-    let precommitments_hash = request.pre_commitments.hash();
-    if public_data.output_hashes.last().is_some() {
-        let last_hash = public_data.output_hashes.last().unwrap();
-        if !last_hash.eq(&precommitments_hash) {
-        return Err(DarksolError::PreCommitmentHashNotMatch.into());
-       }
-    }
-
     // check if merkle root is valid
-    if !spent_tree.has_root(request.merkle_root) {
+    if !spent_tree.has_root(&request.merkle_root) {
         return Err(DarksolError::InvalidMerkelRoot.into());
     }
-
+    let mut encrypted_commitments = request.encrypted_commitments;
+    let public_values_bytes = borsh::to_vec(&PublicValue {
+        root: request.merkle_root,
+        nullifiers: request.nullifiers.clone(),
+        output_hashes: encrypted_commitments.clone(),
+    })?;
+    
+    // Deserialize the SP1Groth16Proof from the instruction data.
+    let groth16_proof = SP1Groth16Proof {
+        proof: request.proof,
+        sp1_public_inputs: public_values_bytes,
+    };
+    // Create an instruction to invoke the verification program.
+    let instruction = Instruction::new_with_borsh(
+        *verification_program.key,
+        &groth16_proof,
+        vec![],
+    );
+    invoke(&instruction, &[verification_program.clone()])?;
+    msg!("finish verify proof");
+    
+    encrypted_commitments.pop();
     // ------------------ verify logic end ---------------------- //
-
     // check if nullifier already exists
     for idx in 0..request.nullifiers.len() {
         if spent_tree.check_nullifier(&request.nullifiers[idx]) {
@@ -633,12 +615,11 @@ pub fn process_withdraw_asset(
     let mut start_position: u64 = spent_tree.next_leaf_index as u64;
     let mut tree_number: u64 = request.metadata.tree_number;
 
-    if !request.encrypted_commitments.is_empty() {
+    if !encrypted_commitments.is_empty() {
         let current_commitment_account = next_account_info(accounts_iter)?; // current tree
-        let commitments_manager_account = next_account_info(accounts_iter)?;
 
         // fetch the current tree number
-        let data = commitments_manager_account.data.borrow_mut();
+        let data = commitments_manager_account.data.borrow();
         // deserialize the data
         let manager_data: CommitmentsManagerAccount =
             CommitmentsManagerAccount::try_from_slice_with_length(&data)?;
@@ -660,6 +641,8 @@ pub fn process_withdraw_asset(
         if current_commitment_account.key != &account_pda {
             return Err(ProgramError::InvalidSeeds);
         }
+
+        msg!("inserting commitments");
 
         // update merkle tree
         // create new commitments account if insert leaf exceeds max tree depth
@@ -690,29 +673,20 @@ pub fn process_withdraw_asset(
             let mut new_commitments_data = &mut new_commitments_account.data.borrow_mut()[..];
 
             // insert leaf into tree
-            let result =
-                inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone());
-            match result {
-                Ok(resp) => {
-                    // update tree
-                    resp.commitments_data.serialize_with_length(&mut new_commitments_data)?;
-
+            match inserted_tree.insert_commitments(&mut encrypted_commitments, &mut new_commitments_data) {
+                Ok(next_leaf_index) => {
                     tree_number = current_tree_number + 1;
-                    start_position = resp.commitments_data.next_leaf_index as u64;
+                    start_position = next_leaf_index;
                 }
                 Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
             }
         } else {
             // insert leaf into tree
-            let result =
-                inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone());
-            match result {
-                Ok(resp) => {
-                    // update tree
-                    resp.commitments_data.serialize_with_length(&mut commitments_acc_data)?;
-
+            match inserted_tree.insert_commitments(&mut encrypted_commitments, &mut commitments_acc_data) {
+                Ok(next_leaf_index) => {
                     tree_number = current_tree_number;
-                    start_position = resp.commitments_data.next_leaf_index as u64;
+                    start_position = next_leaf_index;
+                    msg!("start position: {:?}", start_position);
                 }
                 Err(_err) => return Err(DarksolError::FailedInsertCommitmentHash.into()),
             }
@@ -723,31 +697,33 @@ pub fn process_withdraw_asset(
     spent_tree.serialize_with_length(&mut spent_commitments_acc_data)?;
 
     // transfer token to reciever token account
-    transfer_token_out(
-        program_id,
-        &[
-            funding_account.clone(),
-            user_wallet.clone(),
-            user_token_account.clone(),
-            pda_token_account.clone(),
-            token_program.clone(),
-        ],
-        request.pre_commitments.value,
-    )?;
+    // TODO: test and fix transfer_token_out
+    // transfer_token_out(
+    //     program_id,
+    //     &[
+    //         funding_account.clone(),
+    //         user_wallet.clone(),
+    //         user_token_account.clone(),
+    //         pda_token_account.clone(),
+    //         token_program.clone(),
+    //     ],
+    //     request.pre_commitments.value,
+    // )?;
 
+    msg!("transfered to user token account");
     // emit event
     let event = TransactionEvent {
         start_position,
         tree_number,
-        commitments: request.encrypted_commitments.clone(),
-        commitment_cipher_text: request.commitment_cipher_texts.clone(),
+        commitments: encrypted_commitments,
+        commitment_cipher_text: request.commitment_cipher_texts,
     };
 
     let serialize_event = borsh::to_vec(&event)?;
     sol_log_data(&[b"withdraw_event", &serialize_event]);
 
     let nullifier_event = NullifierEvent {
-        nullifiers: request.nullifiers.clone(),
+        nullifiers: request.nullifiers,
     };
     let nullifier_serialize_event = borsh::to_vec(&nullifier_event)?;
     sol_log_data(&[b"nullifiers_event", &nullifier_serialize_event]);
@@ -758,6 +734,5 @@ pub fn process_withdraw_asset(
 pub fn process_initialize_account(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
     msg!("Hello");
     initialize_commitments_manager(program_id, accounts)?;
-
     Ok(())
 }

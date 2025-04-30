@@ -26,7 +26,7 @@ pub fn process_instruction(
     );
 
     // Invoke the DarkSol program.
-    invoke(&instruction, accounts)?;
+    invoke(&instruction, &[verification_program.clone()])?;
 
     Ok(())
 }

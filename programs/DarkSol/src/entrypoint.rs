@@ -4,6 +4,7 @@ use solana_program::{
 use crate::instruction::DarkSolInstruction;
 use crate::processor::{process_deposit_fund, process_initialize_account, process_transfer_asset, process_withdraw_asset};
 
+#[cfg(not(feature = "no-entrypoint"))]
 entrypoint!(process_instruction);
 
 pub fn process_instruction(

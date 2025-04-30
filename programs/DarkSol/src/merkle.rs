@@ -1,13 +1,14 @@
-use crate::{u256_to_bytes, PreCommitments, ZERO_VALUE};
+use crate::{u256_to_bytes, utils::serialize::BorshSerializeWithLength, PreCommitments, ZERO_VALUE};
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::msg;
 use std::collections::HashMap;
 
 pub fn sha256(inputs: Vec<&[u8]>) -> Vec<u8> {
     solana_sha256_hasher::hashv(&inputs).to_bytes().to_vec()
 }
 
-pub fn hash_left_right(left: Vec<u8>, right: Vec<u8>) -> Vec<u8> {
-    solana_sha256_hasher::hashv(&[&left, &right])
+pub fn hash_left_right(left: &[u8], right: &[u8]) -> Vec<u8> {
+    solana_sha256_hasher::hashv(&[left, right])
         .to_bytes()
         .to_vec()
 }
@@ -16,7 +17,7 @@ pub fn hash_precommits(pre_commitments: PreCommitments) -> Vec<u8> {
     let amount: Vec<u8> = pre_commitments.value.to_le_bytes().to_vec();
 
     sha256(vec![
-        pre_commitments.nullifier_pubkey.as_slice(),
+        pre_commitments.utxo_pubkey.as_slice(),
         pre_commitments.token_id.as_slice(),
         amount.as_slice(),
     ])
@@ -63,14 +64,6 @@ pub struct CommitmentsAccount<const TREE_DEPTH: usize> {
     nullifiers: HashMap<Vec<u8>, bool>,
 }
 
-// InsertResp return the tree number the insertion occur
-// the leaf index, updated commitments data and the address
-// that store the data
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
-pub struct InsertResp<const TREE_DEPTH: usize> {
-    pub commitments_data: CommitmentsAccount<TREE_DEPTH>,
-}
-
 impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
     /// Create a new empty Merkle Tree
     pub fn new(tree_number: u64) -> Self {
@@ -87,7 +80,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
             filled_sub_trees.push(current_zero.clone());
 
             // Calculate the zero value for this level
-            current_zero = hash_left_right(current_zero.clone(), current_zero.clone());
+            current_zero = hash_left_right(&current_zero, &current_zero);
         }
 
         // Now safely insert into the inner HashMap
@@ -109,12 +102,13 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
     pub fn insert_commitments(
         &mut self,
         commitments: &mut Vec<Vec<u8>>,
-    ) -> Result<InsertResp<TREE_DEPTH>, String> {
+        write_to: &mut &mut [u8],
+    ) -> Result<u64, String> {
         // this check is just double check to make sure the leaf count does not exceed the limit
         // as above logic must also check this in order to create another data account
         // for a new tree if insertion exceeds the max tree dept.
         let mut count = commitments.len();
-
+        msg!("count: {}", count);
         if self.exceed_tree_depth(count) {
             return Err(format!("exceed max tree dept"));
         }
@@ -143,8 +137,8 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
 
                 // Calculate the hash for the next level
                 commitments[next_level_hash_index] = hash_left_right(
-                    self.filled_sub_trees[level].clone(),
-                    commitments[insertion_element].clone(),
+                    &self.filled_sub_trees[level],
+                    &commitments[insertion_element],
                 );
 
                 // Increment
@@ -174,7 +168,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
 
                 // Calculate the hash for the next level
                 commitments[next_level_hash_index] =
-                    hash_left_right(commitments[insertion_element].clone(), right);
+                    hash_left_right(&commitments[insertion_element], &right);
 
                 // Increment level insertion index
                 level_insertion_index += 2;
@@ -191,9 +185,12 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
         self.merkle_root = commitments[0].clone();
         self.root_history.insert(self.merkle_root.clone(), true);
 
-        Ok(InsertResp {
-            commitments_data: self.clone(),
-        })
+        if !write_to.is_empty() {
+            self.serialize_with_length(write_to)
+            .map_err(|e| format!("Failed to serialize: {}", e))?;
+        }
+
+        Ok(self.next_leaf_index as u64)
     }
 
     pub fn exceed_tree_depth(&self, commitments_length: usize) -> bool {
@@ -212,8 +209,8 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
     }
 
     /// Get the Merkle root
-    pub fn has_root(&self, root: Vec<u8>) -> bool {
-        self.root_history.contains_key(&root)
+    pub fn has_root(&self, root: &[u8]) -> bool {
+        self.root_history.contains_key(root)
     }
 
     pub fn insert_nullifier(&mut self, nullifier: Vec<u8>) {
@@ -243,7 +240,7 @@ mod tests {
             assert_eq!(zero_tree.zeros[i], level_zero);
             assert_eq!(zero_tree.filled_sub_trees[i], level_zero);
 
-            level_zero = hash_left_right(level_zero.clone(), level_zero.clone());
+            level_zero = hash_left_right(&level_zero, &level_zero);
         }
 
         assert_eq!(zero_tree.merkle_root, level_zero);
@@ -260,6 +257,7 @@ mod tests {
             let mut tree = CommitmentsAccount::<TREE_DEPTH>::new(0);
             let root = tree.root();
 
+            let mut empty_writer: &mut [u8] = &mut[];
             for step in 0..(16 / gap) {
                 let mut insert_list = vec![];
                 for i in (step * gap)..((step + 1) * gap) {
@@ -267,13 +265,13 @@ mod tests {
                     insert_list.push(hash_i);
                 }
 
-                tree.insert_commitments(&mut insert_list).unwrap();
+                tree.insert_commitments(&mut insert_list, &mut empty_writer).unwrap();
             }
 
             for i in ((16 / gap) * gap)..16 {
                 let hash_i = sha256(vec![&[i]]);
                 let mut insert_list = vec![hash_i];
-                tree.insert_commitments(&mut insert_list).unwrap();
+                tree.insert_commitments(&mut insert_list, &mut empty_writer).unwrap();
             }
 
             gap += 1;
@@ -297,7 +295,8 @@ mod tests {
             insert_list.push(hash_i);
         }
 
-        let result = tree.insert_commitments(&mut insert_list);
+        let mut empty_writer: &mut [u8] = &mut[];
+        let result = tree.insert_commitments(&mut insert_list, &mut empty_writer);
         assert!(result.is_err());
     }
 }

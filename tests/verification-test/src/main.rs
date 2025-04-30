@@ -10,6 +10,8 @@ use veil_types::{PublicData, MerkleTreeSparse, SP1Groth16Proof, PrivateData, Cip
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
+pub mod process;
+pub mod util;
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
 pub const METHODS_ELF: &[u8] =  include_bytes!("../bin/methods");
 
@@ -211,7 +213,7 @@ fn prove() -> SP1ProofWithPublicValues {
     let args = Arguments {
         public_data,
         private_data,
-        tree_depth: 32u64,
+        tree_depth: 16u64,
         input_count: 3u64,
         output_count: 2u64,
     };

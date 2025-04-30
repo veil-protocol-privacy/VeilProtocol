@@ -3,6 +3,9 @@ name = "darksol"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+no-entrypoint = []
+
 [dependencies]
 spl-associated-token-account = { git = "https://github.com/solana-program/associated-token-account", rev = "5b18d35d817dc8fb9d91fed546ab2f9cbe369842", features = [
     "no-entrypoint",

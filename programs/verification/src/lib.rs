@@ -3,6 +3,7 @@ use solana_program::{
     account_info::AccountInfo, entrypoint::ProgramResult, msg, program_error::ProgramError,
     pubkey::Pubkey,
 };
+use utils::VerificationError;
 use veil_types::SP1Groth16Proof;
 
 pub mod verify_proof;
@@ -21,7 +22,7 @@ solana_program::entrypoint!(process_instruction);
 /// let vkey_hash = vk.bytes32();
 /// ```
 const METHOD_VKEY_HASH: &str =
-    "0x0023cd765324054f00567e986a5c43ca6beb470e7b4c46be87b0884b36d7ea37";
+    "0x00a532e81b3294d66c6cfba971317b9e51a8be565d3835195354c5c31c9d88b0";
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -30,7 +31,7 @@ pub fn process_instruction(
 ) -> ProgramResult {
     // Deserialize the SP1Groth16Proof from the instruction data.
     let groth16_proof = SP1Groth16Proof::try_from_slice(instruction_data)
-        .map_err(|_| ProgramError::InvalidInstructionData)?;
+        .map_err(|_| VerificationError::InvalidInstructionData)?;
 
     // Get the SP1 Groth16 verification key from the `sp1-solana` crate.
     let vk = crate::verify_proof::GROTH16_VK_4_0_0_RC3_BYTES;
@@ -41,7 +42,6 @@ pub fn process_instruction(
         &groth16_proof.sp1_public_inputs,
         &METHOD_VKEY_HASH,
         vk,
-    )
-    .map_err(|_| ProgramError::InvalidInstructionData)?;
+    )?;
     Ok(())
 }

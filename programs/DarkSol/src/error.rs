@@ -43,6 +43,14 @@ pub enum DarksolError {
     // 9
     /// precommitments hash not match
     PreCommitmentHashNotMatch,
+
+    // 10
+    /// proof deserialize fail
+    ProofDeserializeFail,
+
+    // 11
+    /// public values deserialize fail
+    PublicValuesDeserializeFail,
 }
 
 impl From<DarksolError> for ProgramError {

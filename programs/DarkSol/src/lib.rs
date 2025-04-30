@@ -16,7 +16,7 @@ use spl_token::{solana_program::program_pack::Pack, state::Account as TokenAccou
 use std::clone;
 // use wasm_bindgen::prelude::*;
 
-const TREE_DEPTH: usize = 31;
+const TREE_DEPTH: usize = 15;
 
 pub const ZERO_VALUE: U256 = U256([
     0x30644E72E131A029,
@@ -38,30 +38,20 @@ pub fn derive_pda(value: u64, program_id: &Pubkey) -> (Pubkey, u8) {
 
 // PreCommitments contains info before being shielded inside protocol
 //#[wasm_bindgen]
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(BorshSerialize, BorshDeserialize, Clone, Debug)]
 pub struct PreCommitments {
-    pub nullifier_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
+    pub utxo_pubkey: Vec<u8>, // Poseidon(Poseidon(spending public key, nullifying key), random)
     pub token_id: Vec<u8>,
     pub value: u64, // amount
-}
-
-impl clone::Clone for PreCommitments {
-    fn clone(&self) -> PreCommitments {
-        return PreCommitments {
-            nullifier_pubkey: self.nullifier_pubkey.clone(),
-            value: self.value.clone(),
-            token_id: self.token_id.clone(),
-        };
-    }
 }
 
 // for js client support
 //#[wasm_bindgen]
 impl PreCommitments {
     //#[wasm_bindgen(constructor)]
-    pub fn new(value: u64, token_id: Vec<u8>, nullifier_pubkey: Vec<u8>) -> Self {
+    pub fn new(value: u64, token_id: Vec<u8>, utxo_pubkey: Vec<u8>) -> Self {
         PreCommitments {
-            nullifier_pubkey,
+            utxo_pubkey,
             value,
             token_id,
         }
@@ -69,7 +59,7 @@ impl PreCommitments {
 
     pub fn hash(&self) -> Vec<u8> {
         sha256(vec![
-            self.nullifier_pubkey.as_slice(),
+            self.utxo_pubkey.as_slice(),
             self.token_id.as_slice(),
             self.value.to_le_bytes().as_slice(),
         ])

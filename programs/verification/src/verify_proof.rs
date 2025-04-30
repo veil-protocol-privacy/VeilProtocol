@@ -34,7 +34,7 @@ pub const GROTH16_VK_4_0_0_RC3_BYTES: &[u8] = include_bytes!("../vk/groth16_vk.b
 /// The public inputs are the vkey hash and the commited values digest, concatenated.
 /// The proof is a decompressed G1 element, followed by a decompressed G2 element, followed by a
 /// decompressed G1 element.
-pub fn verify_proof_raw(proof: &[u8], public_inputs: &[u8], vk: &[u8]) -> Result<(), Error> {
+pub fn verify_proof_raw(proof: &[u8], public_inputs: &[u8], vk: &[u8]) -> Result<(), VerificationError> {
     let proof = load_proof_from_bytes(proof)?;
     let vk = load_groth16_verifying_key_from_bytes(vk)?;
     let public_inputs = load_public_inputs_from_bytes(public_inputs)?;
@@ -55,14 +55,14 @@ pub fn verify_proof_raw(proof: &[u8], public_inputs: &[u8], vk: &[u8]) -> Result
         &public_inputs.inputs,
         &vk,
     )
-    .map_err(|_| Error::VerificationError)?;
+    .map_err(|_| VerificationError::VerificationError)?;
 
-    if verifier.verify().map_err(|_| Error::VerificationError)? {
+    if verifier.verify().map_err(|_| VerificationError::VerificationError)? {
         println!("Verification successful.");
         Ok(())
     } else {
         println!("Verification failed.");
-        Err(Error::VerificationError)
+        Err(VerificationError::VerificationError)
     }
 }
 
@@ -80,7 +80,7 @@ pub fn verify_proof(
     sp1_public_inputs: &[u8],
     sp1_vkey_hash: &str,
     groth16_vk: &[u8],
-) -> Result<(), Error> {
+) -> Result<(), VerificationError> {
     // Hash the vk and get the first 4 bytes.
     let groth16_vk_hash: [u8; 4] = Sha256::digest(groth16_vk)[..4].try_into().unwrap();
 
@@ -90,7 +90,7 @@ pub fn verify_proof(
     // SP1 prepends the raw Groth16 proof with the first 4 bytes of the groth16 vkey to
     // faciliate this check.
     if groth16_vk_hash != proof[..4] {
-        return Err(Error::Groth16VkeyHashMismatch);
+        return Err(VerificationError::Groth16VkeyHashMismatch);
     }
 
     let sp1_vkey_hash = decode_sp1_vkey_hash(sp1_vkey_hash)?;
@@ -101,4 +101,32 @@ pub fn verify_proof(
         &groth16_public_values(&sp1_vkey_hash, sp1_public_inputs),
         groth16_vk,
     )
+}
+
+#[cfg(test)]
+mod test{
+    use crate::{verify_proof, METHOD_VKEY_HASH};
+    use sp1_sdk::SP1ProofWithPublicValues;
+
+    #[test]
+    fn test_verify_from_sp1() { 
+        // Read the serialized SP1ProofWithPublicValues from the file.
+        let sp1_proof_with_public_values_file = "../../tests/verification-test/bin/methods_proof.bin";
+        let sp1_proof_with_public_values =
+            SP1ProofWithPublicValues::load(&sp1_proof_with_public_values_file).unwrap();
+
+        let proof_bytes = sp1_proof_with_public_values.bytes();
+        let sp1_public_inputs = sp1_proof_with_public_values.public_values.to_vec();
+
+        // Get the SP1 Groth16 verification key from the `sp1-solana` crate.
+        let vk = crate::verify_proof::GROTH16_VK_4_0_0_RC3_BYTES;
+
+        // Verify the proof.
+        verify_proof(
+            &proof_bytes,
+            &sp1_public_inputs,
+            &METHOD_VKEY_HASH,
+            vk,
+        ).unwrap();
+    }
 }
