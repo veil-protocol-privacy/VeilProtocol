@@ -1,8 +1,11 @@
 use std::panic;
 
 use darksol::{CommitmentCipherText, DepositRequest, PreCommitments, ShieldCipherText};
-use solana_sdk::{pubkey::Pubkey, signature::Keypair};
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, system_instruction, transaction::Transaction};
 use sp1_sdk::{HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
+use spl_associated_token_account::{get_associated_token_address, instruction::create_associated_token_account_idempotent};
+use spl_token::instruction::sync_native;
 use veil_types::{generate_nullifier, keccak, sha256, Arguments, MerkleTreeSparse, PrivateData, PublicData, UTXO};
 use rand::Rng;
 
@@ -12,6 +15,45 @@ pub fn generate_random_bytes(length: usize) -> Vec<u8> {
     let mut rng = rand::rng();
     (0..length).map(|_| rng.random()).collect()
 }
+
+pub async fn create_ata(
+    payer: &Keypair,
+    client: &RpcClient,
+) {
+    let payer_pubkey = payer.pubkey();
+    let ata = get_associated_token_address(&payer_pubkey, &spl_token::native_mint::ID);
+
+    let amount = 1 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
+
+    // create token account for wrapped sol
+    let create_ata_ix = create_associated_token_account_idempotent(
+        &payer_pubkey,
+        &payer_pubkey,
+        &spl_token::native_mint::ID,
+        &spl_token::ID,
+    );
+
+    let transfer_ix = system_instruction::transfer(&payer_pubkey, &ata, amount);
+    let sync_native_ix = sync_native(&spl_token::ID, &ata).unwrap();
+
+    let mut transaction = Transaction::new_with_payer(
+        &[create_ata_ix, transfer_ix, sync_native_ix],
+        Some(&payer_pubkey),
+    );
+
+    transaction.sign(
+        &[&payer],
+        client.get_latest_blockhash().await.unwrap(),
+    );
+
+    let res = client.send_and_confirm_transaction(&transaction).await;
+
+    match res {
+        Ok(_) => println!("Initialize transaction successful"),
+        Err(err) => println!("Initialize transaction failed: {:?}", err),
+    }
+}
+
 
 pub fn generate_proof_withdraw(
     tree: MerkleTreeSparse<16>,

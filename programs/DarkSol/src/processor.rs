@@ -184,25 +184,19 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
     let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
     let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
-
-    // Derive PDA funding account to pay for the new account
-    // TODO: change the seeds
-    let (funding_pda, bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], program_id);
-
-    // check all the accounts info
-    if funding_account.key != &funding_pda
-        || pda_token_account.owner != &funding_pda
-        || user_token_account.owner != user_wallet.key
-    {
-        return Err(ProgramError::InvalidSeeds);
-    }
-
+    
     // TODO: apply withdraw fee
-
     let (funding_ata, ata_bump) = Pubkey::find_program_address(&[b"funding_ata"], program_id);
+
 
     msg!("funding_ata: {:?}", ata_bump);
 
+    let ata_info = spl_token::state::Account::unpack(&pda_token_account.data.borrow())?;
+    if ata_info.amount < amount {
+        return Err(ProgramError::InsufficientFunds);
+    }
+
+    msg!("ata_amout: {}", ata_info.amount);
     let ata_seed: &[&[u8]] = &[
         b"funding_ata",
         // &funding_account.key.to_bytes(),
@@ -215,24 +209,39 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
         return Err(ProgramError::InvalidSeeds);
     }
 
+    // Derive PDA funding account to pay for the new account
+    // TODO: change the seeds
+    let (funding_pda, bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], program_id);
+
+    // Create signer seeds for the PDA
+    let funding_seed: &[&[u8]] = &[
+        b"funding_pda",
+        &[bump_seed],
+    ];
+
+    // check all the accounts info
+    if funding_account.key != &funding_pda
+    {
+        return Err(ProgramError::InvalidSeeds);
+    }
+
     // transfer token from contract owned token account to user token address
     invoke_signed(
-        // TODO: emit error
         &spl_transfer(
             token_program.key,
-            pda_token_account.key,
-            user_token_account.key,
-            user_wallet.key, // User must sign as authority
+            pda_token_account.key,  // Source - program's ATA
+            user_token_account.key,        // Destination - user's token account
+            funding_account.key,           // Authority - PDA that owns the ATA
             &[],
             amount,
         )?,
         &[
             pda_token_account.clone(),
             user_token_account.clone(),
-            user_wallet.clone(),
+            funding_account.clone(),
             token_program.clone(),
         ],
-        &[ata_seed], // PDA signs
+        &[funding_seed], // PDA signs the transaction
     )?;
 
     Ok(())
@@ -698,17 +707,17 @@ pub fn process_withdraw_asset(
 
     // transfer token to reciever token account
     // TODO: test and fix transfer_token_out
-    // transfer_token_out(
-    //     program_id,
-    //     &[
-    //         funding_account.clone(),
-    //         user_wallet.clone(),
-    //         user_token_account.clone(),
-    //         pda_token_account.clone(),
-    //         token_program.clone(),
-    //     ],
-    //     request.pre_commitments.value,
-    // )?;
+    transfer_token_out(
+        program_id,
+        &[
+            funding_account.clone(),
+            user_wallet.clone(),
+            user_token_account.clone(),
+            pda_token_account.clone(),
+            token_program.clone(),
+        ],
+        request.pre_commitments.value,
+    )?;
 
     msg!("transfered to user token account");
     // emit event

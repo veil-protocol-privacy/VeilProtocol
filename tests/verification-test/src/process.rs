@@ -16,7 +16,7 @@ use spl_associated_token_account::instruction::create_associated_token_account_i
 use spl_token::instruction::sync_native;
 use veil_types::{generate_nullifier, MerkleTreeSparse, UTXO};
 
-use crate::util::{create_deposit_instructions_data_test, generate_proof_withdraw, generate_random_bytes};
+use crate::util::{create_ata, create_deposit_instructions_data_test, generate_proof_withdraw, generate_random_bytes};
 
 #[tokio::test]
 async fn test_process_instruction() {
@@ -110,37 +110,13 @@ async fn test_process_instruction() {
     rpc_client.send_and_confirm_transaction(&transaction).await.unwrap();
 
     let ata = get_associated_token_address(&depositor_pubkey, &spl_token::native_mint::ID);
-
     let amount = 1 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
 
-    // create token account for wrapped sol
-    let create_ata_ix = create_associated_token_account_idempotent(
-        &depositor_pubkey,
-        &depositor_pubkey,
-        &spl_token::native_mint::ID,
-        &spl_token::ID,
-    );
-
-    let transfer_ix = system_instruction::transfer(&depositor_pubkey, &ata, amount);
-    let sync_native_ix = sync_native(&spl_token::ID, &ata).unwrap();
-
-    let mut transaction = Transaction::new_with_payer(
-        &[create_ata_ix, transfer_ix, sync_native_ix],
-        Some(&depositor_pubkey),
-    );
-
-    transaction.sign(
-        &[&depositor_keypair],
-        rpc_client.get_latest_blockhash().await.unwrap(),
-    );
-
-    let res = rpc_client.send_and_confirm_transaction(&transaction).await;
-
-    match res {
-        Ok(_) => println!("Initialize transaction successful"),
-        Err(err) => println!("Initialize transaction failed: {:?}", err),
-    }
-
+    // Create account
+    create_ata(
+        &depositor_keypair,
+        &rpc_client,
+    ).await;
     let funding_balance = rpc_client.get_balance(&funding_pda).await.unwrap();
 
     println!("Funding balance: {}", funding_balance);
@@ -260,6 +236,11 @@ async fn test_process_instruction() {
     let receiver_token_addr =
         get_associated_token_address(&receiver_pubkey, &spl_token::native_mint::ID);
     
+    create_ata(
+        &receiver_keypair,
+        &rpc_client,
+    ).await;
+
     // generate proof
     use std::time::Instant;
     let now = Instant::now();
@@ -343,6 +324,9 @@ async fn test_process_instruction() {
     // insert variant bytes
     serialized_data.insert(0, 2);
     println!("data length: {}", serialized_data.len());
+    for account in account_metas.iter() {
+        println!("Account: {}", account.pubkey);
+    }
     // Create instruction
     let instruction = Instruction {
         program_id,
