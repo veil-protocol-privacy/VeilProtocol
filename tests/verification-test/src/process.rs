@@ -363,10 +363,6 @@ async fn test_process_instruction_transfer() {
         vec![deposit_utxo.clone(), deposit_utxo_2.clone(), deposit_utxo_3.clone()],
         vec![deposit_random.clone(), deposit_random_2.clone(), deposit_random_3.clone()],
         vec![1 * 10_u64.pow(9), 2 * 10_u64.pow(9), 2 * 10_u64.pow(9)],
-        // &depositor_spend_key,
-        // &depositor_view_key,
-        // &receiver_spend_key,
-        // &receiver_view_key,
         vec![amount, amount, amount, amount],
         vec![
             receiver_viewing_pubkey,

@@ -147,15 +147,6 @@ pub fn generate_proof_transfer(
         utxo_output_keys.push(receiver_utxo_pubkey.clone());
     });
     
-    println!("utxos_in len: {}", utxos_in.len());
-    println!("random_in len: {}", random_in.len());
-    println!("nullifiers len: {}", nullifiers.len());
-    println!("amount_in len: {}", amounts_in.len());
-    println!("merkle_paths len: {}", merkle_paths.len());
-    println!("merkle_leaf_indices len: {}", leaf_indices.len());
-    println!("output_hashes len: {}", output_hashes.len());
-    println!("amount_out len: {}", new_amounts_out.len());
-    println!("utxo_output_keys len: {}", utxo_output_keys.len());
     let public_data = PublicData {
         merkle_root: merkle_root.clone(),
         params_hash,
