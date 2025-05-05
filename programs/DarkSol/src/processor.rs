@@ -434,24 +434,23 @@ pub fn process_transfer_asset(
     let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
         CommitmentsAccount::try_from_slice_with_length(&current_commitments_acc_data)?;
 
-    // // Deserialize the SP1Groth16Proof from the instruction data.
-    // let groth16_proof = SP1Groth16Proof::try_from_slice(&request.proof)
-    //     .map_err(|_| ProgramError::InvalidInstructionData)?;
+    // Deserialize the SP1Groth16Proof from the instruction data.
+    let public_value = PublicValue {
+        root: spent_tree.root(),
+        nullifiers: request.nullifiers.clone(),
+        output_hashes: request.encrypted_commitments.clone(),
+    };
 
-    // let public_values = groth16_proof.sp1_public_inputs.as_slice();
-    // let public_data = PublicValue::try_from_slice(public_values)
-    //     .map_err(|_| ProgramError::InvalidInstructionData)?;
-    // if public_data.root.ne(&request.merkle_root) {
-    //     return Err(DarksolError::MerkleRootNotMatch.into());
-    // }
-    // if public_data.nullifiers.ne(&request.nullifiers) {
-    //     return Err(DarksolError::NullifiersNotMatch.into());
-    // }
+    let public_values_bytes = borsh::to_vec(&public_value)?;
+    let groth16_proof = SP1Groth16Proof{
+        proof: request.proof,
+        sp1_public_inputs: public_values_bytes,
+    };
 
     // Create an instruction to invoke the verification program.
-    let instruction = Instruction::new_with_bytes(
+    let instruction = Instruction::new_with_borsh(
         *verification_account.key,
-        &request.proof,
+        &groth16_proof,
         vec![],
     );
     invoke(&instruction, accounts)?;

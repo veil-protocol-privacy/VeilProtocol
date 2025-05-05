@@ -30,4 +30,5 @@ echo "Verification program deployed successfully!"
 echo "Verification program ID: $VERIFICATION_ID"
 
 # Run test
-cargo test --package verification-test --release -- process::test_process_instruction
+cargo test --package verification-test --release -- process::test_process_instruction_transfer
+# cargo test --package verification-test --release -- process::test_process_instruction_withdraw

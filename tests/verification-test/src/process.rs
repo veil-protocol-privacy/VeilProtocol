@@ -1,5 +1,5 @@
-use borsh::BorshDeserialize;
-use darksol::{derive_pda, PreCommitments, SP1Groth16Proof, WithdrawRequest};
+use borsh::{de, BorshDeserialize};
+use darksol::{derive_pda, PreCommitments, SP1Groth16Proof, TransferRequest, WithdrawRequest};
 use darksol::merkle::{hash_precommits, CommitmentsAccount};
 use darksol::utils::account::get_associated_token_address_and_bump_seed;
 use darksol::utils::serialize::BorshDeserializeWithLength;
@@ -14,12 +14,441 @@ use solana_program::system_program::ID as SYSTEM_PROGRAM_ID;
 use spl_associated_token_account::get_associated_token_address;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use spl_token::instruction::sync_native;
-use veil_types::{generate_nullifier, MerkleTreeSparse, UTXO};
+use veil_types::{generate_nullifier, sha256, MerkleTreeSparse, UTXO};
+use serde::{Serialize, Deserialize};
 
-use crate::util::{create_ata, create_deposit_instructions_data_test, generate_proof_withdraw, generate_random_bytes};
+use crate::util::{create_ata, create_deposit_instructions_data_test, generate_proof_transfer, generate_proof_withdraw, generate_random_bytes};
+
+#[derive(Serialize, Deserialize)]
+pub struct TransferInput {
+    pub amount: u64,
+    pub merkle_leaf_index: u64,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TransferOutput {
+    pub amount: u64,
+    // pub receiver_public_viewing_key: String, // re adding this when we want to support batch transfer in one instruction
+    pub memo: String,
+}
 
 #[tokio::test]
-async fn test_process_instruction() {
+async fn test_process_instruction_transfer() {
+    let rpc_client = RpcClient::new_with_commitment(
+        String::from("http://127.0.0.1:8899"),
+        CommitmentConfig::confirmed(),
+    );
+    
+    let program_id = pubkey!("Eh5vvfnEjfz3csWNnGokCuyYYC8SS5JS6QZndGf5cZuQ");
+    let verification_program_id = pubkey!("EBS746yLYNwmy6dABYgvPTkgBZpHoHoj58jLbTscxYeA");
+
+    let payer = solana_sdk::signature::Keypair::new();
+    let payer_pubkey = payer.pubkey();
+
+    let depositor_keypair = solana_sdk::signature::Keypair::new();
+    let depositor_pubkey = depositor_keypair.pubkey();
+
+    let depositor_deposit_key = solana_sdk::signature::Keypair::new();
+    let depositor_view_key = solana_sdk::signature::Keypair::new();
+    let depositor_spend_key = solana_sdk::signature::Keypair::new();
+
+    let receiver_keypair = solana_sdk::signature::Keypair::new();
+    let receiver_pubkey = receiver_keypair.pubkey();
+
+    let receiver_deposit_key = solana_sdk::signature::Keypair::new();
+    let receiver_view_key = solana_sdk::signature::Keypair::new();
+    let receiver_spend_key = solana_sdk::signature::Keypair::new();
+    let receiver_viewing_pubkey = receiver_view_key.pubkey().to_bytes().to_vec();
+    let receiver_nullying_key = sha256(vec![receiver_view_key.secret().to_bytes().as_ref()]);
+    let receiver_master_pubkey = sha256(vec![receiver_spend_key.pubkey().to_bytes().as_ref(), receiver_nullying_key.as_slice()]);
+
+
+    let transaction_signature = rpc_client
+        .request_airdrop(&payer_pubkey, 300 * solana_sdk::native_token::LAMPORTS_PER_SOL)
+        .await.unwrap();
+    loop {
+        if rpc_client.confirm_transaction(&transaction_signature).await.unwrap() {
+            break;
+        }
+    }
+
+    let data_len = 0;
+    let rent_exemption_amount = solana_sdk::rent::Rent::default().minimum_balance(data_len);
+
+    let create_acc_ix = system_instruction::create_account(
+        &payer.pubkey(),                        // payer
+        &depositor_pubkey,                      // new account
+        rent_exemption_amount + 100_000_000_000, // rent exemption fee
+        data_len as u64,                        // space reseved for new account
+        &SYSTEM_PROGRAM_ID,                     //assigned program address
+    );
+
+    let mut transaction = Transaction::new_with_payer(&[create_acc_ix], Some(&payer.pubkey()));
+    transaction.sign(&[&payer, &depositor_keypair], rpc_client.get_latest_blockhash().await.unwrap());
+    rpc_client.send_and_confirm_transaction(&transaction).await.unwrap();
+
+    let create_acc_ix = system_instruction::create_account(
+        &payer.pubkey(),                        // payer
+        &receiver_pubkey,                      // new account
+        rent_exemption_amount + 100_000_000_000, // rent exemption fee
+        data_len as u64,                        // space reseved for new account
+        &SYSTEM_PROGRAM_ID,                     //assigned program address
+    );
+
+    let mut transaction = Transaction::new_with_payer(&[create_acc_ix], Some(&payer.pubkey()));
+    transaction.sign(&[&payer, &receiver_keypair], rpc_client.get_latest_blockhash().await.unwrap());
+    rpc_client.send_and_confirm_transaction(&transaction).await.unwrap();
+
+    let depositor_balance = rpc_client.get_balance(&depositor_pubkey).await.unwrap();
+    println!("Depositor balance: {}", depositor_balance);
+
+    // initialize
+
+    let mut account_metas: Vec<AccountMeta> = vec![];
+    account_metas.push(AccountMeta::new(depositor_pubkey, true));
+    let (funding_pda, _bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], &program_id);
+    account_metas.push(AccountMeta::new(funding_pda, false));
+    let (commitments_pda, _bump_seed) = derive_pda(1, &program_id);
+    account_metas.push(AccountMeta::new(commitments_pda, false));
+    let (commitments_manager_pda, _bump_seed) =
+        Pubkey::find_program_address(&[b"commitments_manager_pda"], &program_id);
+    account_metas.push(AccountMeta::new(commitments_manager_pda, false));
+    account_metas.push(AccountMeta::new(SYSTEM_PROGRAM_ID, false));
+
+    let instruction = Instruction {
+        program_id,
+        accounts: account_metas,
+        data: vec![3],
+    };
+
+    let mut transaction =
+        Transaction::new_with_payer(&[instruction], Some(&depositor_keypair.pubkey()));
+
+    transaction.sign(&[&depositor_keypair], rpc_client.get_latest_blockhash().await.unwrap());
+    rpc_client.send_and_confirm_transaction(&transaction).await.unwrap();
+
+    let ata = get_associated_token_address(&depositor_pubkey, &spl_token::native_mint::ID);
+    let amount = 1 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
+
+    // Create account
+    create_ata(
+        &depositor_keypair,
+        &rpc_client,
+    ).await;
+    let funding_balance = rpc_client.get_balance(&funding_pda).await.unwrap();
+
+    println!("Funding balance: {}", funding_balance);
+
+     // deposit
+
+    let (mut deposit_data, deposit_utxo, deposit_random) = match create_deposit_instructions_data_test(
+        &spl_token::native_mint::ID,
+        amount,
+        depositor_spend_key.pubkey().to_bytes().to_vec(),
+        depositor_view_key.pubkey().to_bytes().to_vec(),
+        depositor_deposit_key.pubkey().to_bytes().to_vec(),
+        "test deposit".to_string(),
+    ) {
+        Ok(data) => data,
+        Err(err) => {
+            println!(
+                "{}",
+                format!("failed to create instruction data: {}", err.to_string())
+            );
+
+            return;
+        }
+    };
+
+    // get current tree number to fetch the correct commitments account info
+    let tree_number = 1;
+
+    let ata = get_associated_token_address(&depositor_pubkey, &spl_token::native_mint::ID);
+
+    // get all necessary account meta
+    // funding_account
+    // user_wallet
+    // user_token_account
+    // pda_token_account
+    // mint_account
+    // commitments_account
+    // commitments_manager_account
+    // token_program
+    // system_program
+    let mut account_metas: Vec<AccountMeta> = vec![];
+
+    let (funding_pda, bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], &program_id);
+    account_metas.push(AccountMeta::new(funding_pda, false));
+    account_metas.push(AccountMeta::new(depositor_pubkey, true));
+    account_metas.push(AccountMeta::new(ata, false));
+    let (funding_ata, ata_bump) = get_associated_token_address_and_bump_seed(
+        &funding_pda,
+        &spl_token::native_mint::ID,
+        &spl_associated_token_account::ID,
+        &spl_token::ID,
+    );
+    let (funding_ata, ata_bump) = Pubkey::find_program_address(&[b"funding_ata"], &program_id);
+    println!("bump {:?}", ata_bump);
+    account_metas.push(AccountMeta::new(funding_ata, false));
+    account_metas.push(AccountMeta::new_readonly(spl_token::native_mint::ID, false));
+    let (commitments_pda, _bump_seed) = derive_pda(tree_number, &program_id);
+    account_metas.push(AccountMeta::new(commitments_pda, false));
+    let (commitments_manager_pda, _bump_seed) =
+        Pubkey::find_program_address(&[b"commitments_manager_pda"], &program_id);
+    account_metas.push(AccountMeta::new(commitments_manager_pda, false));
+    account_metas.push(AccountMeta::new_readonly(spl_token::ID, false));
+    account_metas.push(AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false));
+    account_metas.push(AccountMeta::new_readonly(
+        solana_program::rent::sysvar::ID,
+        false,
+    ));
+    account_metas.push(AccountMeta::new_readonly(
+        spl_associated_token_account::ID,
+        false,
+    ));
+
+    for i in account_metas.iter() {
+        println!("Account: {}", i.pubkey);
+    }
+
+    // insert variant bytes
+    deposit_data.insert(0, 0);
+    // Create instruction
+    let instruction = Instruction {
+        program_id,
+        accounts: account_metas.clone(),
+        data: deposit_data,
+    };
+
+    let message = Message::new(&[instruction], Some(&depositor_pubkey));
+    let mut transaction = Transaction::new_unsigned(message);
+
+    transaction.sign(&[&depositor_keypair], rpc_client.get_latest_blockhash().await.unwrap());
+
+    let res = rpc_client.send_and_confirm_transaction(&transaction).await;
+
+    match res {
+        Ok(_) => println!("Deposit transaction successful"),
+        Err(err) => panic!("Deposit transaction failed: {:?}", err),
+    };
+
+    let (mut deposit_data_2, deposit_utxo_2, deposit_random_2) = match create_deposit_instructions_data_test(
+        &spl_token::native_mint::ID,
+        2 * 10_u64.pow(9),
+        depositor_spend_key.pubkey().to_bytes().to_vec(),
+        depositor_view_key.pubkey().to_bytes().to_vec(),
+        depositor_deposit_key.pubkey().to_bytes().to_vec(),
+        "test deposit 2".to_string(),
+    ) {
+        Ok(data) => data,
+        Err(err) => {
+            println!(
+                "{}",
+                format!("failed to create instruction data: {}", err.to_string())
+            );
+
+            return;
+        }
+    };
+
+    // insert variant bytes
+    deposit_data_2.insert(0, 0);
+    // Create instruction
+    let instruction = Instruction {
+        program_id,
+        accounts: account_metas.clone(),
+        data: deposit_data_2,
+    };
+
+    let message = Message::new(&[instruction], Some(&depositor_pubkey));
+    let mut transaction = Transaction::new_unsigned(message);
+
+    transaction.sign(&[&depositor_keypair], rpc_client.get_latest_blockhash().await.unwrap());
+
+    let res = rpc_client.send_and_confirm_transaction(&transaction).await;
+
+    match res {
+        Ok(_) => println!("Deposit transaction successful"),
+        Err(err) => panic!("Deposit transaction failed: {:?}", err),
+    };
+
+    let (mut deposit_data_3, deposit_utxo_3, deposit_random_3) = match create_deposit_instructions_data_test(
+        &spl_token::native_mint::ID,
+        2 * 10_u64.pow(9),
+        depositor_spend_key.pubkey().to_bytes().to_vec(),
+        depositor_view_key.pubkey().to_bytes().to_vec(),
+        depositor_deposit_key.pubkey().to_bytes().to_vec(),
+        "test deposit 3".to_string(),
+    ) {
+        Ok(data) => data,
+        Err(err) => {
+            println!(
+                "{}",
+                format!("failed to create instruction data: {}", err.to_string())
+            );
+
+            return;
+        }
+    };
+
+    // insert variant bytes
+    deposit_data_3.insert(0, 0);
+    // Create instruction
+    let instruction = Instruction {
+        program_id,
+        accounts: account_metas,
+        data: deposit_data_3,
+    };
+
+    let message = Message::new(&[instruction], Some(&depositor_pubkey));
+    let mut transaction = Transaction::new_unsigned(message);
+
+    transaction.sign(&[&depositor_keypair], rpc_client.get_latest_blockhash().await.unwrap());
+
+    let res = rpc_client.send_and_confirm_transaction(&transaction).await;
+
+    match res {
+        Ok(_) => println!("Deposit transaction successful"),
+        Err(err) => panic!("Deposit transaction failed: {:?}", err),
+    };
+
+    let commitments_account: CommitmentsAccount<31>;
+    match rpc_client.get_account(&commitments_pda).await {
+        Ok(account  ) => {
+            let account_data = account.data;
+            commitments_account = CommitmentsAccount::try_from_slice_with_length(&account_data).unwrap();
+            assert!(commitments_account.next_leaf_index == 3);
+        },
+        Err(e) => panic!("Failed to get account data: {}", e),
+    };
+
+    let mut tree = MerkleTreeSparse::<16>::new(1);
+    let pre_commitment = PreCommitments::new(amount, spl_token::native_mint::ID.to_bytes().to_vec(), deposit_utxo.utxo_public_key());
+    let inserted_leaf = hash_precommits(pre_commitment);
+
+    let pre_commitment = PreCommitments::new(2 * 10_u64.pow(9), spl_token::native_mint::ID.to_bytes().to_vec(), deposit_utxo_2.utxo_public_key());
+    let inserted_leaf_2 = hash_precommits(pre_commitment);
+
+    let pre_commitment = PreCommitments::new(2 * 10_u64.pow(9), spl_token::native_mint::ID.to_bytes().to_vec(), deposit_utxo_3.utxo_public_key());
+    let inserted_leaf_3 = hash_precommits(pre_commitment);
+
+    tree.insert(vec![inserted_leaf.clone(), inserted_leaf_2.clone(), inserted_leaf_3.clone()]);
+    assert_eq!(tree.root(), commitments_account.root());
+
+    // generate proof
+    use std::time::Instant;
+    let now = Instant::now();
+
+    let receiver_view_key_2 = solana_sdk::signature::Keypair::new();
+    let receiver_spend_key_2 = solana_sdk::signature::Keypair::new();
+    let receiver_viewing_pubkey_2 = receiver_view_key_2.pubkey().to_bytes().to_vec();
+    let receiver_nullying_key_2 = sha256(vec![receiver_view_key_2.secret().to_bytes().as_ref()]);
+    let receiver_master_pubkey_2 = sha256(vec![receiver_spend_key_2.pubkey().to_bytes().as_ref(), receiver_nullying_key_2.as_slice()]);
+
+    let receiver_view_key_3 = solana_sdk::signature::Keypair::new();
+    let receiver_spend_key_3 = solana_sdk::signature::Keypair::new();
+    let receiver_viewing_pubkey_3 = receiver_view_key_3.pubkey().to_bytes().to_vec();
+    let receiver_nullying_key_3 = sha256(vec![receiver_view_key_3.secret().to_bytes().as_ref()]);
+    let receiver_master_pubkey_3 = sha256(vec![receiver_spend_key_3.pubkey().to_bytes().as_ref(), receiver_nullying_key_3.as_slice()]);
+
+    let receiver_view_key_4 = solana_sdk::signature::Keypair::new();
+    let receiver_spend_key_4 = solana_sdk::signature::Keypair::new();
+    let receiver_viewing_pubkey_4 = receiver_view_key_4.pubkey().to_bytes().to_vec();
+    let receiver_nullying_key_4 = sha256(vec![receiver_view_key_4.secret().to_bytes().as_ref()]);
+    let receiver_master_pubkey_4 = sha256(vec![receiver_spend_key_4.pubkey().to_bytes().as_ref(), receiver_nullying_key_4.as_slice()]);
+
+    let (proof, nullifiers, ciphertext, utxo_hashes) = generate_proof_transfer(
+        tree.clone(),
+        vec![inserted_leaf.clone(), inserted_leaf_2.clone(), inserted_leaf_3.clone()],
+        vec![deposit_utxo.clone(), deposit_utxo_2.clone(), deposit_utxo_3.clone()],
+        vec![deposit_random.clone(), deposit_random_2.clone(), deposit_random_3.clone()],
+        vec![1 * 10_u64.pow(9), 2 * 10_u64.pow(9), 2 * 10_u64.pow(9)],
+        // &depositor_spend_key,
+        // &depositor_view_key,
+        // &receiver_spend_key,
+        // &receiver_view_key,
+        vec![amount, amount, amount, amount],
+        vec![
+            receiver_viewing_pubkey,
+            receiver_viewing_pubkey_2,
+            receiver_viewing_pubkey_3,
+            receiver_viewing_pubkey_4,
+        ],
+        vec![
+            receiver_master_pubkey,
+            receiver_master_pubkey_2,
+            receiver_master_pubkey_3,
+            receiver_master_pubkey_4,
+        ],
+        &spl_token::native_mint::ID,
+        &depositor_view_key,
+    );
+    println!("Time taken to generate proof: {:?}", now.elapsed());
+
+    let mut transfer_request = TransferRequest::new(
+        proof.bytes().to_vec(),
+        tree.root(),
+        tree_number,
+        ciphertext,
+    );
+    nullifiers.iter().for_each(|nullifier| {
+        transfer_request.push_nullifiers(nullifier.clone());
+    });
+    utxo_hashes.iter().for_each(|utxo_hash| {
+        transfer_request.push_encrypted_commitments(utxo_hash.clone());
+    });
+
+    let mut serialized_data = match borsh::to_vec(&transfer_request) {
+        Ok(data) => data,
+        Err(err) => panic!("{}", err.to_string()),
+    };
+
+    // get current tree number to fetch the correct commitments account info
+    let newest_tree_number = 1;
+
+    // get all necessary account meta
+    // user wallet
+    // spent commitments account
+    // current commitments account
+    // commitments manager account
+
+    let mut account_metas: Vec<AccountMeta> = vec![];
+    account_metas.push(AccountMeta::new(depositor_pubkey.clone(), true));
+
+    let (spent_commitments_pda, _bump_seed) = derive_pda(tree_number, &program_id);
+    account_metas.push(AccountMeta::new(spent_commitments_pda, false));
+
+    let (current_commitments_pda, _bump_seed) = derive_pda(newest_tree_number, &program_id);
+    account_metas.push(AccountMeta::new(current_commitments_pda, false));
+
+    let (commitments_manager_pda, _bump_seed) =
+        Pubkey::find_program_address(&[b"commitments_manager_pda"], &program_id);
+    account_metas.push(AccountMeta::new(commitments_manager_pda, false));
+
+    // insert variant bytes
+    serialized_data.insert(0, 1);
+    // Create instruction
+    let instruction = Instruction {
+        program_id,
+        accounts: account_metas,
+        data: serialized_data,
+    };
+
+    let message = Message::new(&[instruction], Some(&&depositor_pubkey));
+    let mut transaction = Transaction::new_unsigned(message);
+
+    transaction.sign(&[&depositor_keypair], rpc_client.get_latest_blockhash().await.unwrap());
+
+    let res = rpc_client.send_and_confirm_transaction(&transaction).await;
+
+    match res {
+        Ok(_) => println!("Transfer transaction successful"),
+        Err(err) => println!("Transfer transaction failed: {:?}", err),
+    }
+}
+
+#[tokio::test]
+async fn test_process_instruction_withdraw() {
     let rpc_client = RpcClient::new_with_commitment(
         String::from("http://127.0.0.1:8899"),
         CommitmentConfig::confirmed(),
@@ -123,7 +552,7 @@ async fn test_process_instruction() {
 
      // deposit
 
-     let (mut deposit_data, deposit_utxo, deposit_random) = match create_deposit_instructions_data_test(
+    let (mut deposit_data, deposit_utxo, deposit_random) = match create_deposit_instructions_data_test(
         &spl_token::native_mint::ID,
         amount,
         depositor_spend_key.pubkey().to_bytes().to_vec(),
@@ -198,7 +627,7 @@ async fn test_process_instruction() {
     // Create instruction
     let instruction = Instruction {
         program_id,
-        accounts: account_metas,
+        accounts: account_metas.clone(),
         data: deposit_data,
     };
 
@@ -219,11 +648,10 @@ async fn test_process_instruction() {
         Ok(account  ) => {
             let account_data = account.data;
             commitments_account = CommitmentsAccount::try_from_slice_with_length(&account_data).unwrap();
-            assert!(commitments_account.next_leaf_index == 1);
+            assert!(commitments_account.next_leaf_index == 3);
         },
         Err(e) => panic!("Failed to get account data: {}", e),
     };
-
 
     let mut tree = MerkleTreeSparse::<16>::new(1);
     let pre_commitment = PreCommitments::new(amount, spl_token::native_mint::ID.to_bytes().to_vec(), deposit_utxo.utxo_public_key());
@@ -231,6 +659,8 @@ async fn test_process_instruction() {
 
     tree.insert(vec![inserted_leaf.clone()]);
     assert_eq!(tree.root(), commitments_account.root());
+
+    // withdraw 
 
     // create receiver token account
     let receiver_token_addr =

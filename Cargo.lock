@@ -10269,10 +10269,12 @@ dependencies = [
 name = "verification-test"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "anyhow",
  "borsh 1.5.7",
  "darksol",
  "rand 0.9.1",
+ "serde",
  "solana-client",
  "solana-program",
  "solana-sdk",
