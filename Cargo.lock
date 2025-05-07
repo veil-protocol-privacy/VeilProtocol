@@ -10270,6 +10270,7 @@ name = "verification-test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "borsh 1.5.7",
  "darksol",
  "rand 0.9.1",

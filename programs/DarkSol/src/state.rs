@@ -30,8 +30,6 @@ pub fn initialize_commitments_manager(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
 ) -> Result<(), ProgramError> {
-    msg!("1");
-
     let accounts_iter: &mut std::slice::Iter<'_, _> = &mut accounts.iter();
 
     let payer_account = next_account_info(accounts_iter)?;
@@ -40,10 +38,6 @@ pub fn initialize_commitments_manager(
     let commitments_account = next_account_info(accounts_iter)?;
     let commitments_manager_account = next_account_info(accounts_iter)?;
     let system_program = next_account_info(accounts_iter)?;
-
-    // if commitments_account.owner != program_id || commitments_manager_account.owner != program_id {
-    //     return Err(ProgramError::IncorrectProgramId);
-    // }
 
     // Derive PDA funding account to pay for the new account
     // TODO: change the seeds
@@ -72,7 +66,6 @@ pub fn initialize_commitments_manager(
     if commitments_account.key != &account_pda {
         return Err(ProgramError::InvalidSeeds);
     }
-    msg!("2");
 
     // Size of our commitments manager account
     let manager_account_space: usize = 8 + DATA_LENGTH_CAPACITY;
@@ -82,30 +75,28 @@ pub fn initialize_commitments_manager(
     let manager_account_required_lamports =
         manager_account_rent.minimum_balance(manager_account_space);
 
-    invoke_signed(
-        &system_instruction::create_account(
-            payer_account.key,                 // Account paying for the new account
-            &funding_pda,                      // Account to be created
-            manager_account_required_lamports, // Amount of lamports to transfer to the new account
-            0u64,                              // Size in bytes to allocate for the data field
-            program_id,                        // Set program owner to our program
-        ),
-        &[
-            payer_account.clone(),
-            funding_account.clone(),
-            system_program.clone(),
-        ],
-        &[&[b"funding_pda", &[funding_bump_seed]]],
-    )?;
-
-    msg!("3");
+    if funding_account.lamports() == 0 {
+        invoke_signed(
+            &system_instruction::create_account(
+                payer_account.key,                 // Account paying for the new account
+                &funding_pda,                      // Account to be created
+                manager_account_required_lamports, // Amount of lamports to transfer to the new account
+                0u64,                              // Size in bytes to allocate for the data field
+                program_id,                        // Set program owner to our program
+            ),
+            &[
+                payer_account.clone(),
+                funding_account.clone(),
+                system_program.clone(),
+            ],
+            &[&[b"funding_pda", &[funding_bump_seed]]],
+        )?;
+    }
 
     invoke(
         &system_instruction::transfer(payer_account.key, &funding_pda, 5_000_000_000),
         &[payer_account.clone(), funding_account.clone()],
     )?;
-
-    msg!("4");
 
     // Create the commitments manager account
     invoke_signed(
@@ -123,8 +114,6 @@ pub fn initialize_commitments_manager(
         ],
         &[&[b"commitments_manager_pda", &[commitments_manager_bump_seed]]],
     )?;
-
-    msg!("3");
 
     // Size of our commitments account
     // set to maximum
@@ -155,7 +144,8 @@ pub fn initialize_commitments_manager(
     let new_manager_data = CommitmentsManagerAccount {
         incremental_tree_number: 1,
     };
-    new_manager_data.serialize_with_length(&mut &mut commitments_manager_account.data.borrow_mut()[..])?;
+    new_manager_data
+        .serialize_with_length(&mut &mut commitments_manager_account.data.borrow_mut()[..])?;
     msg!(
         "creating new commitments manager account with increment: {}",
         2

@@ -25,3 +25,4 @@ spl-associated-token-account = { git = "https://github.com/solana-program/associ
     "no-entrypoint",
 ] }
 spl-token = { version = "8.0.0" }
+base64 = "0.22.1"

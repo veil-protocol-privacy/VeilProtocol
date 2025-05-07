@@ -309,7 +309,7 @@ pub fn process_deposit_fund(
     // deserialize the data
     let mut current_tree = CommitmentsAccount::try_from_slice_with_length(&commitments_data)?;
     let mut current_tree_number: u64 = manager_data.incremental_tree_number;
-    let start_position: u64 = 0;
+    let start_position: u64;
 
     msg!("current tree number: {:?}", current_tree_number);
 
@@ -341,14 +341,20 @@ pub fn process_deposit_fund(
         current_tree_number += 1;
 
         // insert leaf into tree
-        current_tree.insert_commitments(&mut vec![inserted_leaf.clone()], &mut new_commitments_data)
+        let next_leaf_index = current_tree
+            .insert_commitments(&mut vec![inserted_leaf.clone()], &mut new_commitments_data)
             .map_err(|_| DarksolError::FailedInsertCommitmentHash)?;
+
+        start_position = next_leaf_index;
     } else {
         // insert leaf into tree
         msg!("not exceed_tree_depth");
 
-        current_tree.insert_commitments(&mut vec![inserted_leaf.clone()], &mut commitments_data)
+        let next_leaf_index = current_tree
+            .insert_commitments(&mut vec![inserted_leaf.clone()], &mut commitments_data)
             .map_err(|_| DarksolError::FailedInsertCommitmentHash)?;
+
+        start_position = next_leaf_index;
     }
 
     // emit events for indexer to scan
@@ -440,11 +446,8 @@ pub fn process_transfer_asset(
     // }
 
     // Create an instruction to invoke the verification program.
-    let instruction = Instruction::new_with_bytes(
-        *verification_account.key,
-        &request.proof,
-        vec![],
-    );
+    let instruction =
+        Instruction::new_with_bytes(*verification_account.key, &request.proof, vec![]);
     invoke(&instruction, accounts)?;
 
     // check if merkle root is valid
@@ -497,7 +500,10 @@ pub fn process_transfer_asset(
         let mut new_commitments_data = &mut new_commitments_account.data.borrow_mut()[..];
 
         // insert leaf into tree
-        let result = inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone(), &mut new_commitments_data);
+        let result = inserted_tree.insert_commitments(
+            &mut request.encrypted_commitments.clone(),
+            &mut new_commitments_data,
+        );
         match result {
             Ok(next_leaf_index) => {
                 start_position = next_leaf_index;
@@ -506,7 +512,10 @@ pub fn process_transfer_asset(
         }
     } else {
         // insert leaf into tree
-        let result = inserted_tree.insert_commitments(&mut request.encrypted_commitments.clone(), &mut current_commitments_acc_data);
+        let result = inserted_tree.insert_commitments(
+            &mut request.encrypted_commitments.clone(),
+            &mut current_commitments_acc_data,
+        );
         match result {
             Ok(next_leaf_index) => {
                 start_position = next_leaf_index;
@@ -555,7 +564,7 @@ pub fn process_withdraw_asset(
     let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
     let verification_program = next_account_info(accounts_iter)?; // verification program
-    
+
     if spent_commitments_account.owner != program_id {
         return Err(ProgramError::IncorrectProgramId);
     }
@@ -586,21 +595,18 @@ pub fn process_withdraw_asset(
         nullifiers: request.nullifiers.clone(),
         output_hashes: encrypted_commitments.clone(),
     })?;
-    
+
     // Deserialize the SP1Groth16Proof from the instruction data.
     let groth16_proof = SP1Groth16Proof {
         proof: request.proof,
         sp1_public_inputs: public_values_bytes,
     };
     // Create an instruction to invoke the verification program.
-    let instruction = Instruction::new_with_borsh(
-        *verification_program.key,
-        &groth16_proof,
-        vec![],
-    );
+    let instruction =
+        Instruction::new_with_borsh(*verification_program.key, &groth16_proof, vec![]);
     invoke(&instruction, &[verification_program.clone()])?;
     msg!("finish verify proof");
-    
+
     encrypted_commitments.pop();
     // ------------------ verify logic end ---------------------- //
     // check if nullifier already exists
@@ -612,7 +618,7 @@ pub fn process_withdraw_asset(
         spent_tree.insert_nullifier(request.nullifiers[idx].clone());
     }
 
-    let mut start_position: u64 = spent_tree.next_leaf_index as u64;
+    let mut start_position: u64 = 0;
     let mut tree_number: u64 = request.metadata.tree_number;
 
     if !encrypted_commitments.is_empty() {
@@ -626,11 +632,11 @@ pub fn process_withdraw_asset(
         let current_tree_number = manager_data.incremental_tree_number;
 
         let mut commitments_acc_data =
-        if current_commitment_account.key == spent_commitments_account.key {
-            &mut spent_commitments_acc_data
-        } else {
-            &mut current_commitment_account.data.borrow_mut()[..]
-        };
+            if current_commitment_account.key == spent_commitments_account.key {
+                &mut spent_commitments_acc_data
+            } else {
+                &mut current_commitment_account.data.borrow_mut()[..]
+            };
 
         let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
             CommitmentsAccount::try_from_slice_with_length(&commitments_acc_data)?;
@@ -673,7 +679,9 @@ pub fn process_withdraw_asset(
             let mut new_commitments_data = &mut new_commitments_account.data.borrow_mut()[..];
 
             // insert leaf into tree
-            match inserted_tree.insert_commitments(&mut encrypted_commitments, &mut new_commitments_data) {
+            match inserted_tree
+                .insert_commitments(&mut encrypted_commitments, &mut new_commitments_data)
+            {
                 Ok(next_leaf_index) => {
                     tree_number = current_tree_number + 1;
                     start_position = next_leaf_index;
@@ -682,7 +690,9 @@ pub fn process_withdraw_asset(
             }
         } else {
             // insert leaf into tree
-            match inserted_tree.insert_commitments(&mut encrypted_commitments, &mut commitments_acc_data) {
+            match inserted_tree
+                .insert_commitments(&mut encrypted_commitments, &mut commitments_acc_data)
+            {
                 Ok(next_leaf_index) => {
                     tree_number = current_tree_number;
                     start_position = next_leaf_index;
@@ -732,7 +742,6 @@ pub fn process_withdraw_asset(
 }
 
 pub fn process_initialize_account(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
-    msg!("Hello");
     initialize_commitments_manager(program_id, accounts)?;
     Ok(())
 }

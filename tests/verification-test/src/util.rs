@@ -1,5 +1,5 @@
 use std::panic;
-
+use borsh::{BorshDeserialize, BorshSerialize};
 use darksol::{CommitmentCipherText, DepositRequest, PreCommitments, ShieldCipherText};
 use solana_sdk::{pubkey::Pubkey, signature::Keypair};
 use sp1_sdk::{HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin};
@@ -177,7 +177,7 @@ pub fn create_deposit_instructions_data_test(
 
     let pre_commitment =
         PreCommitments::new(amount, token_id.to_bytes().to_vec(), utxo.utxo_public_key());
-    let deposit_ciphertext = utxo.encrypt_for_deposit(viewing_key.clone(), deposit_key.clone());
+    let deposit_ciphertext = utxo.encrypt_for_deposit(random.clone(), deposit_key.clone());
 
     let shield_cipher_text = ShieldCipherText::new(
         deposit_ciphertext.shield_key,
@@ -192,4 +192,11 @@ pub fn create_deposit_instructions_data_test(
     };
 
     Ok((instructions_data, utxo, random))
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct KeyJson {
+    pub sk: [u8; 32],
+    pub vk: [u8; 32],
+    pub dk: [u8; 32],
 }

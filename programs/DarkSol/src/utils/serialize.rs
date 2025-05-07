@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use solana_program::msg;
 
 pub const DATA_LENGTH_CAPACITY: usize = 8;
 
