@@ -16,9 +16,12 @@ darksol = { path = "../../programs/DarkSol", features = [
 ] }
 veil-types = { git = "https://github.com/veil-protocol-privacy/veil-core", package = "types" }
 
+aes-gcm = "0.10.3"
+
 anyhow = "1.0.98"
 tokio = "1.44.2"
 borsh = "1.5.1"
+serde = { version = "1.0.219" }
 rand = "0.9.1"
 
 spl-associated-token-account = { git = "https://github.com/solana-program/associated-token-account", rev = "1b1c0ebab3adaf57c0bca9c4a3522a76b9df632c", features = [
