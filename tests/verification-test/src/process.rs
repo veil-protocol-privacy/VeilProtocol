@@ -471,7 +471,7 @@ async fn test_process_instruction_withdraw() {
     let receiver_spend_key = solana_sdk::signature::Keypair::new();
 
     let transaction_signature = rpc_client
-        .request_airdrop(&payer_pubkey, 200 * solana_sdk::native_token::LAMPORTS_PER_SOL)
+        .request_airdrop(&payer_pubkey, 2000 * solana_sdk::native_token::LAMPORTS_PER_SOL)
         .await.unwrap();
     loop {
         if rpc_client.confirm_transaction(&transaction_signature).await.unwrap() {
@@ -485,7 +485,7 @@ async fn test_process_instruction_withdraw() {
     let create_acc_ix = system_instruction::create_account(
         &payer.pubkey(),                        // payer
         &depositor_pubkey,                      // new account
-        rent_exemption_amount + 10_000_000_000, // rent exemption fee
+        rent_exemption_amount + 100_000_000_000, // rent exemption fee
         data_len as u64,                        // space reseved for new account
         &SYSTEM_PROGRAM_ID,                     //assigned program address
     );
@@ -497,7 +497,7 @@ async fn test_process_instruction_withdraw() {
     let create_acc_ix = system_instruction::create_account(
         &payer.pubkey(),                        // payer
         &receiver_pubkey,                      // new account
-        rent_exemption_amount + 10_000_000_000, // rent exemption fee
+        rent_exemption_amount + 100_000_000_000, // rent exemption fee
         data_len as u64,                        // space reseved for new account
         &SYSTEM_PROGRAM_ID,                     //assigned program address
     );
@@ -535,7 +535,7 @@ async fn test_process_instruction_withdraw() {
     rpc_client.send_and_confirm_transaction(&transaction).await.unwrap();
 
     let ata = get_associated_token_address(&depositor_pubkey, &spl_token::native_mint::ID);
-    let amount = 1 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
+    let amount = 10 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
 
     // Create account
     create_ata(
@@ -639,12 +639,12 @@ async fn test_process_instruction_withdraw() {
         Err(err) => panic!("Deposit transaction failed: {:?}", err),
     };
 
-    let commitments_account: CommitmentsAccount<31>;
+    let commitments_account: CommitmentsAccount<15>;
     match rpc_client.get_account(&commitments_pda).await {
         Ok(account  ) => {
             let account_data = account.data;
             commitments_account = CommitmentsAccount::try_from_slice_with_length(&account_data).unwrap();
-            assert!(commitments_account.next_leaf_index == 3);
+            assert!(commitments_account.next_leaf_index == 1);
         },
         Err(e) => panic!("Failed to get account data: {}", e),
     };
