@@ -538,8 +538,8 @@ async fn test_process_instruction_withdraw() {
         CommitmentConfig::confirmed(),
     );
 
-    let program_id = pubkey!("83xCx9MYe1gA6GsEiSxYtH1nqaC7xW3nv7VUb1Z1CnTP");
-    let verification_program_id = pubkey!("HmD1uzk2kBTwW3qwrDwinEzMagJh5BfuqCtcArHwAJdM");
+    let program_id = pubkey!("EuC8EG1N7Q43VGitTVQbinq98g6abQk9ESfaNsSt8fkn");
+    let verification_program_id = pubkey!("Gje8V2QHPnBtUfxJ8w5fSFw2DzJUDfPXxKefZJS5g2Dy");
 
     let payer = solana_sdk::signature::Keypair::new();
     let payer_pubkey = payer.pubkey();
@@ -654,6 +654,7 @@ async fn test_process_instruction_withdraw() {
         Err(err) => panic!("Initialize transaction failed: {:?}", err),
     };
 
+    let ata = get_associated_token_address(&depositor_pubkey, &spl_token::native_mint::ID);
     let amount = 1 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
 
     // Create account
@@ -673,7 +674,8 @@ async fn test_process_instruction_withdraw() {
             deposit_key.clone(),
             "test deposit".to_string(),
         ) {
-            Ok(data) => data,
+            Ok(data
+            ) => data,
             Err(err) => {
                 println!(
                     "{}",
@@ -763,10 +765,9 @@ async fn test_process_instruction_withdraw() {
     match rpc_client.get_account(&commitments_pda).await {
         Ok(account) => {
             let account_data = account.data;
-            commitments_account =
-                CommitmentsAccount::try_from_slice_with_length(&account_data).unwrap();
+            commitments_account = CommitmentsAccount::try_from_slice_with_length(&account_data).unwrap();
             assert!(commitments_account.next_leaf_index == 1);
-        }
+        },
         Err(e) => panic!("Failed to get account data: {}", e),
     };
 

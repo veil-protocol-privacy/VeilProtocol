@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sp1-sdk = "4.0.0"
+sp1-sdk = {version = "4.2.0", features = ["native-gnark"]}
 solana-client = "2.2.7"
 solana-program = "2.2.1"
 solana-sdk = "2.2.2"
