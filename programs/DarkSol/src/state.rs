@@ -75,6 +75,8 @@ pub fn initialize_commitments_manager(
     let manager_account_required_lamports =
         manager_account_rent.minimum_balance(manager_account_space);
 
+    msg!("hello");
+
     if funding_account.lamports() == 0 {
         invoke_signed(
             &system_instruction::create_account(
@@ -93,10 +95,14 @@ pub fn initialize_commitments_manager(
         )?;
     }
 
+    msg!("transfering");
+
     invoke(
         &system_instruction::transfer(payer_account.key, &funding_pda, 5_000_000_000),
         &[payer_account.clone(), funding_account.clone()],
     )?;
+
+    msg!("transfered");
 
     // Create the commitments manager account
     invoke_signed(
@@ -114,6 +120,8 @@ pub fn initialize_commitments_manager(
         ],
         &[&[b"commitments_manager_pda", &[commitments_manager_bump_seed]]],
     )?;
+
+    msg!("manager");
 
     // Size of our commitments account
     // set to maximum
@@ -139,6 +147,8 @@ pub fn initialize_commitments_manager(
         ],
         &[&[&1u64.to_le_bytes(), &[bump_seed]]],
     )?;
+
+    msg!("commitment");
 
     // Update incremental to 2 as we also create a new empty tree
     let new_manager_data = CommitmentsManagerAccount {

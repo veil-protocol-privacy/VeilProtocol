@@ -16,8 +16,7 @@ use spl_associated_token_account::{
 use spl_token::instruction::sync_native;
 use std::panic;
 use veil_types::{
-    blind_keys, keccak, sha256, share_key, Arguments, CipherText, CommitmentPlainText,
-    MerkleTreeSparse, PrivateData, PublicData, UTXO,
+    blind_keys, get_pubkey, keccak, sha256, share_key, Arguments, CipherText, CommitmentPlainText, MerkleTreeSparse, PrivateData, PublicData, UTXO
 };
 
 use crate::METHODS_ELF;
@@ -433,7 +432,7 @@ pub fn encrypt(
     nonce_bytes: Vec<u8>,
     sender_viewing_key: Vec<u8>,
 ) -> CommitmentCipherText {
-    let sender_viewing_pubkey = sender_viewing_key.clone();
+    let sender_viewing_pubkey = get_pubkey(sender_viewing_key.clone());
 
     let (blinded_sender_pubkey, blinded_receiver_pubkey) = blind_keys(
         sender_viewing_pubkey,

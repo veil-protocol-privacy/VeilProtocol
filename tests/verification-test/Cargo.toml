@@ -27,5 +27,5 @@ rand = "0.9.1"
 spl-associated-token-account = { git = "https://github.com/solana-program/associated-token-account", rev = "1b1c0ebab3adaf57c0bca9c4a3522a76b9df632c", features = [
     "no-entrypoint",
 ] }
-spl-token = { version = "8.0.0" }
+spl-token = { version = "8.0.0", features = ["no-entrypoint"]  }
 base64 = "0.22.1"

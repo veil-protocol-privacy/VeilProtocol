@@ -26,6 +26,7 @@ use spl_token::instruction::sync_native;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
+use std::time::Instant;
 use veil_types::{generate_nullifier, sha256, MerkleTreeSparse, UTXO};
 
 #[derive(Serialize, Deserialize)]
@@ -362,7 +363,7 @@ async fn test_process_instruction_transfer() {
         Err(err) => panic!("Deposit transaction failed: {:?}", err),
     };
 
-    let commitments_account: CommitmentsAccount<31>;
+    let commitments_account: CommitmentsAccount<15>;
     match rpc_client.get_account(&commitments_pda).await {
         Ok(account) => {
             let account_data = account.data;
@@ -537,8 +538,8 @@ async fn test_process_instruction_withdraw() {
         CommitmentConfig::confirmed(),
     );
 
-    let program_id = pubkey!("BvRRcGvHnbDkJoNTyZbiNVnowBuy9e7XwqFtR4ZQ8ZxY");
-    let verification_program_id = pubkey!("4Dhg7uztL1Zbw95VKQ1v45Q7U9xQxoX3jJChSq6jsoKt");
+    let program_id = pubkey!("83xCx9MYe1gA6GsEiSxYtH1nqaC7xW3nv7VUb1Z1CnTP");
+    let verification_program_id = pubkey!("HmD1uzk2kBTwW3qwrDwinEzMagJh5BfuqCtcArHwAJdM");
 
     let payer = solana_sdk::signature::Keypair::new();
     let payer_pubkey = payer.pubkey();
@@ -564,7 +565,7 @@ async fn test_process_instruction_withdraw() {
     let transaction_signature = rpc_client
         .request_airdrop(
             &payer_pubkey,
-            200 * solana_sdk::native_token::LAMPORTS_PER_SOL,
+            2000 * solana_sdk::native_token::LAMPORTS_PER_SOL,
         )
         .await
         .unwrap();
@@ -584,7 +585,7 @@ async fn test_process_instruction_withdraw() {
     let create_acc_ix = system_instruction::create_account(
         &payer.pubkey(),                        // payer
         &depositor_pubkey,                      // new account
-        rent_exemption_amount + 10_000_000_000, // rent exemption fee
+        rent_exemption_amount + 100_000_000_000, // rent exemption fee
         data_len as u64,                        // space reseved for new account
         &SYSTEM_PROGRAM_ID,                     //assigned program address
     );
@@ -602,7 +603,7 @@ async fn test_process_instruction_withdraw() {
     let create_acc_ix = system_instruction::create_account(
         &payer.pubkey(),                        // payer
         &receiver_pubkey,                       // new account
-        rent_exemption_amount + 10_000_000_000, // rent exemption fee
+        rent_exemption_amount + 100_000_000_000, // rent exemption fee
         data_len as u64,                        // space reseved for new account
         &SYSTEM_PROGRAM_ID,                     //assigned program address
     );
@@ -633,25 +634,26 @@ async fn test_process_instruction_withdraw() {
     account_metas.push(AccountMeta::new(commitments_manager_pda, false));
     account_metas.push(AccountMeta::new(SYSTEM_PROGRAM_ID, false));
 
-    // let instruction = Instruction {
-    //     program_id,
-    //     accounts: account_metas,
-    //     data: vec![3],
-    // };
+    let instruction = Instruction {
+        program_id,
+        accounts: account_metas,
+        data: vec![3],
+    };
 
-    // let mut transaction =
-    //     Transaction::new_with_payer(&[instruction], Some(&depositor_keypair.pubkey()));
+    let mut transaction =
+        Transaction::new_with_payer(&[instruction], Some(&depositor_keypair.pubkey()));
 
-    // transaction.sign(
-    //     &[&depositor_keypair],
-    //     rpc_client.get_latest_blockhash().await.unwrap(),
-    // );
-    // rpc_client
-    //     .send_and_confirm_transaction(&transaction)
-    //     .await
-    //     .unwrap();
+    transaction.sign(
+        &[&depositor_keypair],
+        rpc_client.get_latest_blockhash().await.unwrap(),
+    );
+    let res = rpc_client.send_and_confirm_transaction(&transaction).await;
 
-    let ata = get_associated_token_address(&depositor_pubkey, &spl_token::native_mint::ID);
+    match res {
+        Ok(_) => println!("Initialize transaction successful"),
+        Err(err) => panic!("Initialize transaction failed: {:?}", err),
+    };
+
     let amount = 1 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
 
     // Create account
@@ -757,13 +759,13 @@ async fn test_process_instruction_withdraw() {
         Err(err) => panic!("Deposit transaction failed: {:?}", err),
     };
 
-    let commitments_account: CommitmentsAccount<31>;
+    let commitments_account: CommitmentsAccount<15>;
     match rpc_client.get_account(&commitments_pda).await {
         Ok(account) => {
             let account_data = account.data;
             commitments_account =
                 CommitmentsAccount::try_from_slice_with_length(&account_data).unwrap();
-            assert!(commitments_account.next_leaf_index == 3);
+            assert!(commitments_account.next_leaf_index == 1);
         }
         Err(e) => panic!("Failed to get account data: {}", e),
     };
@@ -787,23 +789,7 @@ async fn test_process_instruction_withdraw() {
 
     create_ata(&receiver_keypair, &rpc_client).await;
 
-    // generate proof
-    use std::time::Instant;
-    let now = Instant::now();
-    let (proof, nullifiers, ciphertext, utxo_hashes) = generate_proof_withdraw(
-        tree.clone(),
-        vec![inserted_leaf.clone()],
-        vec![deposit_utxo.clone()],
-        vec![deposit_random.clone()],
-        vec![1 * 10_u64.pow(9)],
-        5 * 10_u64.pow(8),
-        spending_key.clone(),
-        viewing_key.clone(),
-        &receiver_spend_key,
-        &receiver_view_key,
-    );
-    println!("Time taken to generate proof: {:?}", now.elapsed());
-    let ciphertext = ciphertext.unwrap();
+    println!("start");
 
     // generate proof
     let now = Instant::now();
@@ -819,19 +805,22 @@ async fn test_process_instruction_withdraw() {
         &receiver_spend_key,
         &receiver_view_key,
     );
+
+    println!("end");
+
     println!("Time taken to generate proof: {:?}", now.elapsed());
     let ciphertext = ciphertext.unwrap();
 
-    let utxo_out = UTXO::new(
-        spending_key.clone(),
-        viewing_key.clone(),
-        spl_token::native_mint::ID.to_bytes().to_vec(),
-        generate_random_bytes(32),
-        generate_random_bytes(32),
-        5 * 10_u64.pow(8),
-        "test withdraw depositor".to_string(),
-    );
-    let nullifer = generate_nullifier(receiver_view_key.secret().as_bytes().to_vec(), 0);
+    // let utxo_out = UTXO::new(
+    //     spending_key.clone(),
+    //     viewing_key.clone(),
+    //     spl_token::native_mint::ID.to_bytes().to_vec(),
+    //     generate_random_bytes(32),
+    //     generate_random_bytes(32),
+    //     5 * 10_u64.pow(8),
+    //     "test withdraw depositor".to_string(),
+    // );
+    // let nullifer = generate_nullifier(receiver_view_key.secret().as_bytes().to_vec(), 0);
 
     let mut withdraw_request = WithdrawRequest::new(
         proof.bytes().to_vec(),
