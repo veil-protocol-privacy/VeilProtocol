@@ -39,8 +39,8 @@ async fn test_process_instruction_transfer() {
         CommitmentConfig::confirmed(),
     );
     
-    let program_id = pubkey!("Eh5vvfnEjfz3csWNnGokCuyYYC8SS5JS6QZndGf5cZuQ");
-    let verification_program_id = pubkey!("EBS746yLYNwmy6dABYgvPTkgBZpHoHoj58jLbTscxYeA");
+    let program_id = pubkey!("GiEEuDqgmeW7GFUf7rHwFxCmYocEe9j4CfRydGJcMBaS");
+    let verification_program_id = pubkey!("8aEyNmun78dxGvRDKt7K1Gik1QLKKQu5GYLyZMMhyvU");
 
     let payer = solana_sdk::signature::Keypair::new();
     let payer_pubkey = payer.pubkey();
@@ -312,7 +312,7 @@ async fn test_process_instruction_transfer() {
         Err(err) => panic!("Deposit transaction failed: {:?}", err),
     };
 
-    let commitments_account: CommitmentsAccount<31>;
+    let commitments_account: CommitmentsAccount<15>;
     match rpc_client.get_account(&commitments_pda).await {
         Ok(account  ) => {
             let account_data = account.data;
@@ -535,7 +535,7 @@ async fn test_process_instruction_withdraw() {
     rpc_client.send_and_confirm_transaction(&transaction).await.unwrap();
 
     let ata = get_associated_token_address(&depositor_pubkey, &spl_token::native_mint::ID);
-    let amount = 10 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
+    let amount = 1 * 10_u64.pow(9); /* Wrapped SOL's decimals is 9, hence amount to wrap is 1 SOL */
 
     // Create account
     create_ata(
@@ -623,7 +623,7 @@ async fn test_process_instruction_withdraw() {
     // Create instruction
     let instruction = Instruction {
         program_id,
-        accounts: account_metas.clone(),
+        accounts: account_metas,
         data: deposit_data,
     };
 
@@ -750,9 +750,6 @@ async fn test_process_instruction_withdraw() {
     // insert variant bytes
     serialized_data.insert(0, 2);
     println!("data length: {}", serialized_data.len());
-    for account in account_metas.iter() {
-        println!("Account: {}", account.pubkey);
-    }
     // Create instruction
     let instruction = Instruction {
         program_id,
