@@ -22,7 +22,7 @@ solana_program::entrypoint!(process_instruction);
 /// let vkey_hash = vk.bytes32();
 /// ```
 const METHOD_VKEY_HASH: &str =
-    "0x00a532e81b3294d66c6cfba971317b9e51a8be565d3835195354c5c31c9d88b0";
+    "0x00ce4403d3b7f80a5787cf33d4809b5c0ddabf363c8375afd3822fdedc593cbe";
 
 pub fn process_instruction(
     _program_id: &Pubkey,

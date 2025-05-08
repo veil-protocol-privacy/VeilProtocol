@@ -16,6 +16,7 @@ use spl_associated_token_account::instruction::create_associated_token_account_i
 use spl_token::instruction::sync_native;
 use veil_types::{generate_nullifier, sha256, MerkleTreeSparse, UTXO};
 use serde::{Serialize, Deserialize};
+use sp1_sdk::install::try_install_circuit_artifacts;
 
 use crate::util::{create_ata, create_deposit_instructions_data_test, generate_proof_transfer, generate_proof_withdraw, generate_random_bytes};
 
@@ -38,7 +39,8 @@ async fn test_process_instruction_transfer() {
         String::from("http://127.0.0.1:8899"),
         CommitmentConfig::confirmed(),
     );
-    
+    try_install_circuit_artifacts("groth16");
+
     let program_id = pubkey!("GiEEuDqgmeW7GFUf7rHwFxCmYocEe9j4CfRydGJcMBaS");
     let verification_program_id = pubkey!("8aEyNmun78dxGvRDKt7K1Gik1QLKKQu5GYLyZMMhyvU");
 
@@ -450,8 +452,9 @@ async fn test_process_instruction_withdraw() {
         CommitmentConfig::confirmed(),
     );
     
-    let program_id = pubkey!("Eh5vvfnEjfz3csWNnGokCuyYYC8SS5JS6QZndGf5cZuQ");
-    let verification_program_id = pubkey!("EBS746yLYNwmy6dABYgvPTkgBZpHoHoj58jLbTscxYeA");
+    try_install_circuit_artifacts("groth16");
+    let program_id = pubkey!("GiEEuDqgmeW7GFUf7rHwFxCmYocEe9j4CfRydGJcMBaS");
+    let verification_program_id = pubkey!("8aEyNmun78dxGvRDKt7K1Gik1QLKKQu5GYLyZMMhyvU");
 
     let payer = solana_sdk::signature::Keypair::new();
     let payer_pubkey = payer.pubkey();
