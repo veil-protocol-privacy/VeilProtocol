@@ -61,7 +61,7 @@ pub struct CommitmentsAccount<const TREE_DEPTH: usize> {
     zeros: Vec<Vec<u8>>,
     filled_sub_trees: Vec<Vec<u8>>,
     root_history: HashMap<Vec<u8>, bool>, // root -> seen
-    nullifiers: HashMap<Vec<u8>, bool>,
+    pub nullifiers: HashMap<Vec<u8>, bool>,
 }
 
 impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
