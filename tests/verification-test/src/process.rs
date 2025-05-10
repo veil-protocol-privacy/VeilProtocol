@@ -20,6 +20,7 @@ use solana_sdk::transaction::Transaction;
 use solana_sdk::{
     commitment_config::CommitmentConfig, pubkey::Pubkey, signer::Signer, system_instruction,
 };
+use sp1_sdk::install::try_install_circuit_artifacts;
 use spl_associated_token_account::get_associated_token_address;
 use spl_associated_token_account::instruction::create_associated_token_account_idempotent;
 use spl_token::instruction::sync_native;
@@ -49,8 +50,9 @@ async fn test_process_instruction_transfer() {
         CommitmentConfig::confirmed(),
     );
 
-    let program_id = pubkey!("BvRRcGvHnbDkJoNTyZbiNVnowBuy9e7XwqFtR4ZQ8ZxY");
-    let verification_program_id = pubkey!("4Dhg7uztL1Zbw95VKQ1v45Q7U9xQxoX3jJChSq6jsoKt");
+    try_install_circuit_artifacts("groth16");
+    let program_id = pubkey!("8r9tvSHwFdUqD3wFF4prRTaoHNSHeymDC2oH4rQToyQ4");
+    let verification_program_id = pubkey!("E6mbEjaGaFtzes5xkJmigQJJ4gyywdRuvvGpxvUirP7k");
 
     let payer = solana_sdk::signature::Keypair::new();
     let payer_pubkey = payer.pubkey();
@@ -404,7 +406,6 @@ async fn test_process_instruction_transfer() {
     assert_eq!(tree.root(), commitments_account.root());
 
     // generate proof
-    use std::time::Instant;
     let now = Instant::now();
 
     let receiver_view_key_2 = solana_sdk::signature::Keypair::new();
@@ -505,9 +506,12 @@ async fn test_process_instruction_transfer() {
     let (commitments_manager_pda, _bump_seed) =
         Pubkey::find_program_address(&[b"commitments_manager_pda"], &program_id);
     account_metas.push(AccountMeta::new(commitments_manager_pda, false));
+    account_metas.push(AccountMeta::new(verification_program_id, false));
 
     // insert variant bytes
     serialized_data.insert(0, 1);
+
+    println!("data length {}", serialized_data.len());
     // Create instruction
     let instruction = Instruction {
         program_id,
@@ -515,20 +519,21 @@ async fn test_process_instruction_transfer() {
         data: serialized_data,
     };
 
-    let message = Message::new(&[instruction], Some(&&depositor_pubkey));
-    let mut transaction = Transaction::new_unsigned(message);
+    let mut transaction: Transaction =
+        Transaction::new_with_payer(&[instruction], Some(&depositor_pubkey));
 
     transaction.sign(
         &[&depositor_keypair],
         rpc_client.get_latest_blockhash().await.unwrap(),
     );
-
     let res = rpc_client.send_and_confirm_transaction(&transaction).await;
 
     match res {
         Ok(_) => println!("Transfer transaction successful"),
         Err(err) => println!("Transfer transaction failed: {:?}", err),
     }
+
+    panic!("hello")
 }
 
 #[tokio::test]
@@ -538,8 +543,9 @@ async fn test_process_instruction_withdraw() {
         CommitmentConfig::confirmed(),
     );
 
-    let program_id = pubkey!("EuC8EG1N7Q43VGitTVQbinq98g6abQk9ESfaNsSt8fkn");
-    let verification_program_id = pubkey!("Gje8V2QHPnBtUfxJ8w5fSFw2DzJUDfPXxKefZJS5g2Dy");
+    try_install_circuit_artifacts("groth16");
+    let program_id = pubkey!("FQXXUySvdrBWWnCsGh6vZa2benHVtvntnm6VXbFdgpV2");
+    let verification_program_id = pubkey!("32VLjmWtXX1oF7dih5x2JqVE3ZSutz22i1hgFUY92khL");
 
     let payer = solana_sdk::signature::Keypair::new();
     let payer_pubkey = payer.pubkey();
@@ -583,11 +589,11 @@ async fn test_process_instruction_withdraw() {
     let rent_exemption_amount = solana_sdk::rent::Rent::default().minimum_balance(data_len);
 
     let create_acc_ix = system_instruction::create_account(
-        &payer.pubkey(),                        // payer
-        &depositor_pubkey,                      // new account
+        &payer.pubkey(),                         // payer
+        &depositor_pubkey,                       // new account
         rent_exemption_amount + 100_000_000_000, // rent exemption fee
-        data_len as u64,                        // space reseved for new account
-        &SYSTEM_PROGRAM_ID,                     //assigned program address
+        data_len as u64,                         // space reseved for new account
+        &SYSTEM_PROGRAM_ID,                      //assigned program address
     );
 
     let mut transaction = Transaction::new_with_payer(&[create_acc_ix], Some(&payer.pubkey()));
@@ -601,11 +607,11 @@ async fn test_process_instruction_withdraw() {
         .unwrap();
 
     let create_acc_ix = system_instruction::create_account(
-        &payer.pubkey(),                        // payer
-        &receiver_pubkey,                       // new account
+        &payer.pubkey(),                         // payer
+        &receiver_pubkey,                        // new account
         rent_exemption_amount + 100_000_000_000, // rent exemption fee
-        data_len as u64,                        // space reseved for new account
-        &SYSTEM_PROGRAM_ID,                     //assigned program address
+        data_len as u64,                         // space reseved for new account
+        &SYSTEM_PROGRAM_ID,                      //assigned program address
     );
 
     let mut transaction = Transaction::new_with_payer(&[create_acc_ix], Some(&payer.pubkey()));
@@ -640,7 +646,7 @@ async fn test_process_instruction_withdraw() {
         data: vec![3],
     };
 
-    let mut transaction =
+    let mut transaction: Transaction =
         Transaction::new_with_payer(&[instruction], Some(&depositor_keypair.pubkey()));
 
     transaction.sign(
@@ -674,8 +680,7 @@ async fn test_process_instruction_withdraw() {
             deposit_key.clone(),
             "test deposit".to_string(),
         ) {
-            Ok(data
-            ) => data,
+            Ok(data) => data,
             Err(err) => {
                 println!(
                     "{}",
@@ -742,7 +747,7 @@ async fn test_process_instruction_withdraw() {
     // Create instruction
     let instruction = Instruction {
         program_id,
-        accounts: account_metas.clone(),
+        accounts: account_metas,
         data: deposit_data,
     };
 
@@ -765,9 +770,10 @@ async fn test_process_instruction_withdraw() {
     match rpc_client.get_account(&commitments_pda).await {
         Ok(account) => {
             let account_data = account.data;
-            commitments_account = CommitmentsAccount::try_from_slice_with_length(&account_data).unwrap();
+            commitments_account =
+                CommitmentsAccount::try_from_slice_with_length(&account_data).unwrap();
             assert!(commitments_account.next_leaf_index == 1);
-        },
+        }
         Err(e) => panic!("Failed to get account data: {}", e),
     };
 
@@ -790,8 +796,6 @@ async fn test_process_instruction_withdraw() {
 
     create_ata(&receiver_keypair, &rpc_client).await;
 
-    println!("start");
-
     // generate proof
     let now = Instant::now();
     let (proof, nullifiers, ciphertext, utxo_hashes) = generate_proof_withdraw(
@@ -807,21 +811,8 @@ async fn test_process_instruction_withdraw() {
         &receiver_view_key,
     );
 
-    println!("end");
-
     println!("Time taken to generate proof: {:?}", now.elapsed());
     let ciphertext = ciphertext.unwrap();
-
-    // let utxo_out = UTXO::new(
-    //     spending_key.clone(),
-    //     viewing_key.clone(),
-    //     spl_token::native_mint::ID.to_bytes().to_vec(),
-    //     generate_random_bytes(32),
-    //     generate_random_bytes(32),
-    //     5 * 10_u64.pow(8),
-    //     "test withdraw depositor".to_string(),
-    // );
-    // let nullifer = generate_nullifier(receiver_view_key.secret().as_bytes().to_vec(), 0);
 
     let mut withdraw_request = WithdrawRequest::new(
         proof.bytes().to_vec(),
@@ -853,6 +844,8 @@ async fn test_process_instruction_withdraw() {
     //
     // current commitment account
     // commitments manager account
+    let mut account_metas: Vec<AccountMeta> = vec![];
+
     let (funding_pda, _bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], &program_id);
     account_metas.push(AccountMeta::new(funding_pda, false));
     let (spent_commitments_pda, _bump_seed) = derive_pda(tree_number, &program_id);

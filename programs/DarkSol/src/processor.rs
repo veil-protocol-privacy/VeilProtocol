@@ -184,10 +184,9 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
     let user_token_account = next_account_info(accounts_iter)?; // User's SPL token account
     let pda_token_account = next_account_info(accounts_iter)?; // PDA token account
     let token_program = next_account_info(accounts_iter)?; // SPL Token Program
-    
+
     // TODO: apply withdraw fee
     let (funding_ata, ata_bump) = Pubkey::find_program_address(&[b"funding_ata"], program_id);
-
 
     msg!("funding_ata: {:?}", ata_bump);
 
@@ -214,14 +213,10 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
     let (funding_pda, bump_seed) = Pubkey::find_program_address(&[b"funding_pda"], program_id);
 
     // Create signer seeds for the PDA
-    let funding_seed: &[&[u8]] = &[
-        b"funding_pda",
-        &[bump_seed],
-    ];
+    let funding_seed: &[&[u8]] = &[b"funding_pda", &[bump_seed]];
 
     // check all the accounts info
-    if funding_account.key != &funding_pda
-    {
+    if funding_account.key != &funding_pda {
         return Err(ProgramError::InvalidSeeds);
     }
 
@@ -230,8 +225,8 @@ fn transfer_token_out(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64
         &spl_transfer(
             token_program.key,
             pda_token_account.key,  // Source - program's ATA
-            user_token_account.key,        // Destination - user's token account
-            funding_account.key,           // Authority - PDA that owns the ATA
+            user_token_account.key, // Destination - user's token account
+            funding_account.key,    // Authority - PDA that owns the ATA
             &[],
             amount,
         )?,
@@ -448,17 +443,14 @@ pub fn process_transfer_asset(
     };
 
     let public_values_bytes = borsh::to_vec(&public_value)?;
-    let groth16_proof = SP1Groth16Proof{
+    let groth16_proof = SP1Groth16Proof {
         proof: request.proof,
         sp1_public_inputs: public_values_bytes,
     };
 
     // Create an instruction to invoke the verification program.
-    let instruction = Instruction::new_with_borsh(
-        *verification_account.key,
-        &groth16_proof,
-        vec![],
-    );
+    let instruction =
+        Instruction::new_with_borsh(*verification_account.key, &groth16_proof, vec![]);
     invoke(&instruction, accounts)?;
 
     // check if merkle root is valid
@@ -619,7 +611,7 @@ pub fn process_withdraw_asset(
     msg!("finish verify proof");
 
     encrypted_commitments.pop();
-    // ------------------ verify logic end ---------------------- //
+
     // check if nullifier already exists
     for idx in 0..request.nullifiers.len() {
         if spent_tree.check_nullifier(&request.nullifiers[idx]) {
@@ -629,6 +621,8 @@ pub fn process_withdraw_asset(
         spent_tree.insert_nullifier(request.nullifiers[idx].clone());
     }
 
+    let mut inserted_tree = spent_tree.clone();
+    let mut spend_tree_equal_current = false;
     let mut start_position: u64 = 0;
     let mut tree_number: u64 = request.metadata.tree_number;
 
@@ -649,8 +643,11 @@ pub fn process_withdraw_asset(
                 &mut current_commitment_account.data.borrow_mut()[..]
             };
 
-        let mut inserted_tree: CommitmentsAccount<TREE_DEPTH> =
-            CommitmentsAccount::try_from_slice_with_length(&commitments_acc_data)?;
+        if current_commitment_account.key != spent_commitments_account.key {
+            inserted_tree = CommitmentsAccount::try_from_slice_with_length(&commitments_acc_data)?;
+        } else {
+            spend_tree_equal_current = true
+        }
 
         // Derive the PDA for the commitments account
         let (account_pda, _bump_seed) = derive_pda(current_tree_number, program_id);
@@ -714,8 +711,13 @@ pub fn process_withdraw_asset(
         }
     }
 
-    // update nullifiers list
-    spent_tree.serialize_with_length(&mut spent_commitments_acc_data)?;
+    if spend_tree_equal_current {
+        // update nullifiers list
+        inserted_tree.serialize_with_length(&mut spent_commitments_acc_data)?;
+    } else {
+        // update nullifiers list
+        spent_tree.serialize_with_length(&mut spent_commitments_acc_data)?;
+    }
 
     // transfer token to reciever token account
     // TODO: test and fix transfer_token_out

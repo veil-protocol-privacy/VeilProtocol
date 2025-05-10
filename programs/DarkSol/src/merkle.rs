@@ -116,6 +116,7 @@ impl<const TREE_DEPTH: usize> CommitmentsAccount<TREE_DEPTH> {
         let mut level_insertion_index: usize = self.next_leaf_index;
 
         self.next_leaf_index += count;
+        msg!("next leaf index: {}", self.next_leaf_index);
 
         // Variables for starting point at next tree level
         let mut next_level_hash_index: usize = 0;

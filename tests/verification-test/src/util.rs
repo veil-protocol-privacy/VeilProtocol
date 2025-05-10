@@ -230,6 +230,7 @@ pub fn generate_proof_transfer(
             );
             commitment_cipher_texts.push(cipher_text);
         });
+    println!("{}", proof.bytes().to_vec().len());
     (proof, nullifiers, commitment_cipher_texts, output_hashes)
 }
 
@@ -297,7 +298,7 @@ pub fn generate_proof_withdraw(
             cipher_text.blinded_sender_pubkey,
             cipher_text.cipher,
             cipher_text.blinded_receiver_pubkey,
-            utxos_out[0].nonce(),
+            cipher_text.nonce.clone(),
             "".to_string().as_bytes().to_vec(),
         ));
     }
